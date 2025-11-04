@@ -11,10 +11,8 @@ from .base import BaseRepository
 
 
 class AIModelFilters(TypedDict, total=False):
-    """AI Model filters for comprehensive search"""
-    
+    """AI Model filters for comprehensive search (global, no user filter)"""
     q: Optional[str]
-    user_id: Optional[UUID]
     model_type: Optional[str]
     provider: Optional[str]
     is_active: Optional[bool]
@@ -47,9 +45,6 @@ class AIModelRepository(BaseRepository[AIModel, AIModelCreate, AIModelUpdate]):
                     )
                 )
             
-            if filters.get("user_id"):
-                filter_conditions.append(AIModel.user_id == filters.get("user_id"))
-            
             if filters.get("model_type"):
                 filter_conditions.append(AIModel.model_type == filters.get("model_type"))
             
@@ -64,61 +59,15 @@ class AIModelRepository(BaseRepository[AIModel, AIModelCreate, AIModelUpdate]):
 
         return db_query.offset(skip).limit(limit).all()
 
-    def get_by_user_id(self, *, user_id: UUID) -> List[AIModel]:
-        """Get all AI models for a specific user"""
-        return (
-            self.db.query(AIModel)
-            .filter(AIModel.user_id == user_id)
-            .all()
-        )
-
-    def get_active_by_user_id(self, *, user_id: UUID) -> List[AIModel]:
-        """Get all active AI models for a specific user"""
-        return (
-            self.db.query(AIModel)
-            .filter(
-                and_(
-                    AIModel.user_id == user_id,
-                    AIModel.is_active == True
-                )
-            )
-            .all()
-        )
-
-    def get_by_user_and_type(self, *, user_id: UUID, model_type: str) -> List[AIModel]:
-        """Get AI models by user and model type"""
-        return (
-            self.db.query(AIModel)
-            .filter(
-                and_(
-                    AIModel.user_id == user_id,
-                    AIModel.model_type == model_type
-                )
-            )
-            .all()
-        )
-
-    def get_by_user_and_provider(self, *, user_id: UUID, provider: str) -> List[AIModel]:
-        """Get AI models by user and provider"""
-        return (
-            self.db.query(AIModel)
-            .filter(
-                and_(
-                    AIModel.user_id == user_id,
-                    AIModel.provider == provider
-                )
-            )
-            .all()
-        )
-
-    def get_by_name_and_user(self, *, name: str, user_id: UUID) -> Optional[AIModel]:
-        """Get AI model by name and user (for uniqueness check)"""
+    def get_by_name_provider_model(self, *, name: str, provider: str, model_name: str) -> Optional[AIModel]:
+        """Get AI model by name+provider+model_name (global uniqueness)"""
         return (
             self.db.query(AIModel)
             .filter(
                 and_(
                     AIModel.name == name,
-                    AIModel.user_id == user_id
+                    AIModel.provider == provider,
+                    AIModel.model_name == model_name
                 )
             )
             .first()
@@ -153,9 +102,6 @@ class AIModelRepository(BaseRepository[AIModel, AIModelCreate, AIModelUpdate]):
                         AIModel.provider.ilike(f"%{query}%"),
                     )
                 )
-            
-            if filters.get("user_id"):
-                filter_conditions.append(AIModel.user_id == filters.get("user_id"))
             
             if filters.get("model_type"):
                 filter_conditions.append(AIModel.model_type == filters.get("model_type"))

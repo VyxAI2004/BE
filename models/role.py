@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING, Optional
-from sqlalchemy import String, Text, ForeignKey
+from sqlalchemy import String, Text, ForeignKey, Boolean, Integer
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -11,12 +11,16 @@ if TYPE_CHECKING:
 
 
 class Role(Base):
-    """Model cho bảng roles"""
+    """Model cho bảng roles (quản lý vai trò người dùng)"""
     __tablename__ = "roles"
     
     # Columns
-    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    slug: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_system_role: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, server_default="100", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default="true", nullable=False)
     
     # Relationships
     users: Mapped[list["UserRole"]] = relationship(
@@ -32,19 +36,23 @@ class Role(Base):
         lazy="select"
     )
     project_users: Mapped[list["ProjectUser"]] = relationship(
-        "ProjectUser", 
+        "ProjectUser",
         back_populates="role",
-        lazy="select"
+        lazy="select",
     )
 
 
 class Permission(Base):
-    """Model cho bảng permissions"""
+    """Model cho bảng permissions (quản lý quyền hạn)"""
     __tablename__ = "permissions"
     
     # Columns
-    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    category: Mapped[str] = mapped_column(String(50), nullable=False)
+    is_system_permission: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default="true", nullable=False)
     
     # Relationships
     roles: Mapped[list["RolePermission"]] = relationship(
@@ -60,8 +68,10 @@ class UserRole(Base):
     __tablename__ = "user_roles"
     
     # Columns
-    user_id: Mapped[str] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    role_id: Mapped[str] = mapped_column(PGUUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[str] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    role_id: Mapped[str] = mapped_column(PGUUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False, index=True)
+    assigned_at: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    assigned_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Relationships
     user: Mapped["User"] = relationship(
@@ -81,8 +91,9 @@ class RolePermission(Base):
     __tablename__ = "role_permissions"
     
     # Columns
-    role_id: Mapped[str] = mapped_column(PGUUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False)
-    permission_id: Mapped[str] = mapped_column(PGUUID(as_uuid=True), ForeignKey("permissions.id", ondelete="CASCADE"), nullable=False)
+    role_id: Mapped[str] = mapped_column(PGUUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False, index=True)
+    permission_id: Mapped[str] = mapped_column(PGUUID(as_uuid=True), ForeignKey("permissions.id", ondelete="CASCADE"), nullable=False, index=True)
+    is_explicitly_granted: Mapped[bool] = mapped_column(Boolean, server_default="true", nullable=False)
     
     # Relationships
     role: Mapped["Role"] = relationship(

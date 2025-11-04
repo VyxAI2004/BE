@@ -33,9 +33,10 @@ class User(Base):
         cascade="all, delete-orphan",
         lazy="select"
     )
-    ai_models: Mapped[list["AIModel"]] = relationship(
-        "AIModel", 
-        back_populates="user", 
+    # Quan hệ với user_ai_models (nhiều user_ai_model cho 1 user)
+    user_ai_models = relationship(
+        "UserAIModel",
+        back_populates="user",
         cascade="all, delete-orphan",
         lazy="select"
     )
