@@ -22,6 +22,35 @@ class ActivityLogRepository(BaseRepository[ActivityLog, ActivityLogCreate, Activ
     def __init__(self, model: Type[ActivityLog], db: Session):
         super().__init__(model, db)
 
+    def _apply_filters(self, query, filters: Optional[ActivityLogFilters] = None):
+        if not filters:
+            return query
+
+        filter_conditions = []
+
+        if filters.get("q"):
+            q = filters.get("q")
+            filter_conditions.append(
+                or_(
+                    ActivityLog.action.ilike(f"%{q}%"),
+                    ActivityLog.target_type.ilike(f"%{q}%"),
+                )
+            )
+
+        if filters.get("action"):
+            filter_conditions.append(ActivityLog.action == filters.get("action"))
+        if filters.get("user_id"):
+            filter_conditions.append(ActivityLog.user_id == filters.get("user_id"))
+        if filters.get("target_id"):
+            filter_conditions.append(ActivityLog.target_id == filters.get("target_id"))
+        if filters.get("target_type"):
+            filter_conditions.append(ActivityLog.target_type == filters.get("target_type"))
+
+        if filter_conditions:
+            query = query.filter(*filter_conditions)
+            
+        return query
+
     def search(
         self,
         *,
@@ -30,58 +59,10 @@ class ActivityLogRepository(BaseRepository[ActivityLog, ActivityLogCreate, Activ
         limit: int = 100,
     ) -> List[ActivityLog]:
         db_query = self.db.query(ActivityLog)
-
-        if filters:
-            filter_conditions = []
-
-            if filters.get("q"):
-                query = filters.get("q")
-                filter_conditions.append(
-                    or_(
-                        ActivityLog.action.ilike(f"%{query}%"),
-                        ActivityLog.target_type.ilike(f"%{query}%"),
-                    )
-                )
-
-            if filters.get("action"):
-                filter_conditions.append(ActivityLog.action == filters.get("action"))
-            if filters.get("user_id"):
-                filter_conditions.append(ActivityLog.user_id == filters.get("user_id"))
-            if filters.get("target_id"):
-                filter_conditions.append(ActivityLog.target_id == filters.get("target_id"))
-            if filters.get("target_type"):
-                filter_conditions.append(ActivityLog.target_type == filters.get("target_type"))
-
-            if filter_conditions:
-                db_query = db_query.filter(*filter_conditions)
-
+        db_query = self._apply_filters(db_query, filters)
         return db_query.offset(skip).limit(limit).all()
 
-    def count_currents(self, *, filters: Optional[ActivityLogFilters] = None) -> int:
+    def count(self, filters: Optional[ActivityLogFilters] = None) -> int:
         db_query = self.db.query(ActivityLog)
-
-        if filters:
-            filter_conditions = []
-
-            if filters.get("q"):
-                query = filters.get("q")
-                filter_conditions.append(
-                    or_(
-                        ActivityLog.action.ilike(f"%{query}%"),
-                        ActivityLog.target_type.ilike(f"%{query}%"),
-                    )
-                )
-
-            if filters.get("action"):
-                filter_conditions.append(ActivityLog.action == filters.get("action"))
-            if filters.get("user_id"):
-                filter_conditions.append(ActivityLog.user_id == filters.get("user_id"))
-            if filters.get("target_id"):
-                filter_conditions.append(ActivityLog.target_id == filters.get("target_id"))
-            if filters.get("target_type"):
-                filter_conditions.append(ActivityLog.target_type == filters.get("target_type"))
-
-            if filter_conditions:
-                db_query = db_query.filter(*filter_conditions)
-
+        db_query = self._apply_filters(db_query, filters)
         return db_query.count()

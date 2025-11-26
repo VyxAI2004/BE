@@ -139,3 +139,29 @@ class StockStatusEnum(str, Enum):
     IN_STOCK = "in_stock"
     OUT_OF_STOCK = "out_of_stock"
     PRE_ORDER = "pre_order"
+
+class LogActionEnum(str, Enum):
+    """Hành động ghi log."""
+    # Auth
+    LOGIN = "login"
+    LOGOUT = "logout"
+    CHANGE_PASSWORD = "change_password"
+    
+    # User
+    CREATE_USER = "create_user"
+    UPDATE_USER = "update_user"
+    DELETE_USER = "delete_user"
+    
+    # Project
+    CREATE_PROJECT = "create_project"
+    UPDATE_PROJECT = "update_project"
+    DELETE_PROJECT = "delete_project"
+    ASSIGN_PROJECT = "assign_project"
+    UPDATE_PROJECT_STATUS = "update_project_status"
+    
+    # Member
+    ADD_MEMBER = "add_member"
+    REMOVE_MEMBER = "remove_member"
+    
+    # System
+    SYSTEM_ERROR = "system_error"

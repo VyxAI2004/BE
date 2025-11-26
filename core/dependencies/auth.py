@@ -30,7 +30,6 @@ def verify_token(
         data = decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
-
     # Verify token type
     if "type" not in data or data["type"] != "access":
         raise HTTPException(status_code=401, detail="Invalid token type")
@@ -40,8 +39,6 @@ def verify_token(
             user_id=data["sub"],
             email=data["email"],
             roles=data["roles"],
-            global_permissions=data.get("global_permissions", []),
-            project_permissions=data.get("project_permissions", {}),
             exp=datetime.fromtimestamp(data["exp"], timezone.utc)
         )
     except Exception:

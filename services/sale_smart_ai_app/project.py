@@ -7,6 +7,7 @@ from schemas.project import ProjectCreate, ProjectUpdate
 from schemas.project_user import ProjectMemberAssignRequest
 from shared.enums import ProjectStatusEnum
 from .base import BaseService
+from .permission import PermissionService
 
 class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectRepository]):
     def __init__(self, db: Session):
@@ -66,8 +67,9 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectR
         if not db_project:
             return None
         
-        # Check if user has permission to update (creator or assignee)
-        if db_project.created_by != user_id and db_project.assigned_to != user_id:
+        # Check permission
+        permission_service = PermissionService(self.db)
+        if not permission_service.has_permission(user_id, "project:update", project_id):
             raise ValueError("You don't have permission to update this project")
         
         return self.update(db_obj=db_project, payload=payload)
@@ -78,28 +80,15 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectR
         if not db_project:
             raise ValueError("Project not found")
         
-        # Check if user has permission to delete (only creator)
-        if db_project.created_by != user_id:
+        # Check permission
+        permission_service = PermissionService(self.db)
+        if not permission_service.has_permission(user_id, "project:delete", project_id):
             raise ValueError("You don't have permission to delete this project")
         
-        self.delete(id=project_id)
-
-    def get_user_projects(self, user_id: uuid.UUID, skip: int = 0, limit: int = 100) -> List[Project]:
-        """Get projects created by or assigned to a specific user"""
-        return self.repository.get_by_user(user_id=user_id, skip=skip, limit=limit)
-
-    def count_projects(self, *, filters: Optional[ProjectFilters] = None) -> int:
-        """Count projects with filters"""
-        return self.repository.count_search(filters=filters)
-
-    def assign_project(self, project_id: uuid.UUID, assigned_to: uuid.UUID, user_id: uuid.UUID) -> Optional[Project]:
-        """Assign project to a single user (legacy method)"""
-        db_project = self.get(project_id)
-        if not db_project:
-            return None
         
-        # Check if user has permission to assign (creator or current assignee)
-        if db_project.created_by != user_id and db_project.assigned_to != user_id:
+        # Check permission
+        permission_service = PermissionService(self.db)
+        if not permission_service.has_permission(user_id, "project:assign", project_id):
             raise ValueError("You don't have permission to assign this project")
         
         update_payload = ProjectUpdate(assigned_to=assigned_to)
@@ -118,8 +107,9 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectR
         if not db_project:
             return None
         
-        # Check if user has permission to assign (creator or current assignee)
-        if db_project.created_by != user_id and db_project.assigned_to != user_id:
+        # Check permission
+        permission_service = PermissionService(self.db)
+        if not permission_service.has_permission(user_id, "project:manage_members", project_id):
             raise ValueError("You don't have permission to assign users to this project")
         
         # Use ProjectUserService to assign multiple users
@@ -145,8 +135,9 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectR
         if not db_project:
             return None
         
-        # Check if user has permission (creator or current assignee)
-        if db_project.created_by != user_id and db_project.assigned_to != user_id:
+        # Check permission
+        permission_service = PermissionService(self.db)
+        if not permission_service.has_permission(user_id, "project:manage_members", project_id):
             raise ValueError("You don't have permission to remove users from this project")
         
         # Use ProjectUserService to remove users
@@ -171,8 +162,9 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectR
         if not db_project:
             return None
         
-        # Check if user has permission to update status
-        if db_project.created_by != user_id and db_project.assigned_to != user_id:
+        # Check permission
+        permission_service = PermissionService(self.db)
+        if not permission_service.has_permission(user_id, "project:update_status", project_id):
             raise ValueError("You don't have permission to update this project status")
         
         from datetime import datetime

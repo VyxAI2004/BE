@@ -44,9 +44,9 @@ class ActivityLogService(
         """Tìm log với filter linh hoạt"""
         return self.repository.search(filters=filters, skip=skip, limit=limit)
 
-    def count_currents(self, filters: Optional[ActivityLogFilters] = None) -> int:
+    def count(self, filters: Optional[ActivityLogFilters] = None) -> int:
         """Đếm số log theo filters"""
-        return self.repository.count_currents(filters=filters)
+        return self.repository.count(filters=filters)
 
     def get_by_user(
         self, user_id: UUID, skip: int = 0, limit: int = 100

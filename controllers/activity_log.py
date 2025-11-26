@@ -50,7 +50,7 @@ def get_activity_logs(
             target_type=target_type,
         )
         logs = activity_log_service.search(filters=filters, skip=skip, limit=limit)
-        total = activity_log_service.count_currents(filters=filters)
+        total = activity_log_service.count(filters=filters)
         return ListActivityLogsResponse(
             total=total,
             items=[ActivityLogResponse.model_validate(log) for log in logs],
@@ -81,7 +81,7 @@ def get_by_user(
 ):
     """Lấy danh sách log theo user_id"""
     logs = activity_log_service.get_by_user(user_id=user_id, skip=skip, limit=limit)
-    total = activity_log_service.count_currents(filters=ActivityLogFilters(user_id=user_id))
+    total = activity_log_service.count(filters=ActivityLogFilters(user_id=user_id))
     return ListActivityLogsResponse(
         total=total,
         items=[ActivityLogResponse.model_validate(log) for log in logs],

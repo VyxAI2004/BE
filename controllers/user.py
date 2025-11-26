@@ -1,8 +1,10 @@
 import uuid
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 from core.dependencies.auth import verify_token
+from core.dependencies.db import get_db
 from schemas.auth import TokenData
 
 from core.dependencies.services import get_user_service
@@ -29,6 +31,17 @@ def create_user(
         return user
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.get("/me/permissions", response_model=List[str])
+def get_my_permissions(
+    user_from_token: TokenData = Depends(verify_token),
+    db: Session = Depends(get_db),
+):
+    """Get current user's permissions"""
+    from services.sale_smart_ai_app.permission import PermissionService
+    permission_service = PermissionService(db)
+    return permission_service.get_user_permissions(user_id=user_from_token.user_id)
+
     
 @router.get("/", response_model=ListUsersResponse)
 def get_list_users(

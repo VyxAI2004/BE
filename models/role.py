@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, Optional
-from sqlalchemy import String, Text, ForeignKey, Boolean, Integer
+from datetime import datetime
+from sqlalchemy import String, Text, ForeignKey, Boolean, Integer, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -70,7 +71,9 @@ class UserRole(Base):
     # Columns
     user_id: Mapped[str] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     role_id: Mapped[str] = mapped_column(PGUUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False, index=True)
-    assigned_at: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now()
+    )
     assigned_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Relationships
