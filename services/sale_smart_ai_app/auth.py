@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
@@ -134,3 +135,6 @@ class AuthService(
 
         roles = [ur.role.name for ur in user.roles]
         return self._create_tokens(user, roles)
+
+    def get_by_email(self, email: str) -> Optional[User]:
+        return self.repository.get_by_email(email=email)

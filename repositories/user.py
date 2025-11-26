@@ -4,6 +4,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from models.user import User
+from models.role import UserRole
 from schemas.user import UserCreate, UserUpdate
 
 from .base import BaseRepository
@@ -73,3 +74,20 @@ class UserRepository(BaseRepository[User, UserCreate , UserUpdate ]):
         db_query = self.db.query(User)
         db_query = self._apply_filters(db_query, filters)
         return db_query.count()
+
+    def add_role(self, user_id: str, role_id: str) -> User:
+        user_role = UserRole(user_id=user_id, role_id=role_id)
+        self.db.add(user_role)
+        self.db.commit()
+        return self.get(user_id)
+
+    def remove_role(self, user_id: str, role_id: str) -> User:
+        user_role = (
+            self.db.query(UserRole)
+            .filter(UserRole.user_id == user_id, UserRole.role_id == role_id)
+            .first()
+        )
+        if user_role:
+            self.db.delete(user_role)
+            self.db.commit()
+        return self.get(user_id)

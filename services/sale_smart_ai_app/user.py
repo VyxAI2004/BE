@@ -2,6 +2,7 @@ import uuid
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from models.user import User
+from models.role import Role, UserRole
 from core.security import hash_password
 from repositories.user import UserFilters, UserRepository
 from schemas.user import UserCreate, UserUpdate
@@ -48,7 +49,36 @@ class UserService(BaseService[User, UserCreate, UserUpdate, UserRepository]):
         payload_dict = payload.model_dump() if hasattr(payload, 'model_dump') else payload.dict()
         payload_dict["password_hash"] = hashed
         payload_dict.pop("password", None)
-        return self.create(payload=UserCreate(**payload_dict))
+        user = self.create(payload=UserCreate(**payload_dict))
+        
+        # Assign default role 'User'
+        default_role = self.db.query(Role).filter(Role.name == "User").first()
+        if default_role:
+            self.repository.add_role(user.id, default_role.id)
+            
+        return user
+
+    def assign_role_to_user(self, user_id: uuid.UUID, role_id: uuid.UUID) -> Optional[User]:
+        # 1. Check role exists
+        role = self.db.query(Role).filter(Role.id == role_id).first()
+        if not role:
+            raise ValueError("Role not found")
+            
+        # 2. Check user exists
+        user = self.get(user_id)
+        if not user:
+            raise ValueError("User not found")
+
+        # 3. Check if already assigned
+        existing = self.db.query(UserRole).filter_by(user_id=user_id, role_id=role_id).first()
+        if existing:
+            return user
+
+        # 4. Assign
+        return self.repository.add_role(user_id, role_id)
+
+    def remove_role_from_user(self, user_id: uuid.UUID, role_id: uuid.UUID) -> Optional[User]:
+        return self.repository.remove_role(user_id, role_id)
 
     def update_user(self, user_id: uuid.UUID, payload: UserUpdate) -> Optional[User]:
         db_user = self.get(user_id)

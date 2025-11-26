@@ -1,9 +1,10 @@
-from typing import Generic, List, Optional, Type, TypeVar
+from typing import Generic, List, Optional, Type, TypeVar, Any
 from uuid import UUID
 
 from pydantic import BaseModel
-from sqlalchemy import and_, delete
+from sqlalchemy import and_, delete, asc, desc
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from models.base import Base
 
@@ -17,63 +18,115 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         self.model = model
         self.db = db
 
+    def apply_filters(self, query, filters: Optional[dict]):
+        if not filters:
+            return query
+
+        conditions = []
+        for key, value in filters.items():
+            if value is None:
+                continue
+
+            if "__" in key:
+                field_name, op = key.split("__", 1)
+
+                if not hasattr(self.model, field_name):
+                    continue
+
+                field = getattr(self.model, field_name)
+
+                match op:
+                    case "gte":
+                        conditions.append(field >= value)
+                    case "gt":
+                        conditions.append(field > value)
+                    case "lte":
+                        conditions.append(field <= value)
+                    case "lt":
+                        conditions.append(field < value)
+                    case "like":
+                        conditions.append(field.like(value))
+                    case "in" if isinstance(value, (list, tuple)):
+                        conditions.append(field.in_(value))
+
+                continue
+
+            if hasattr(self.model, key):
+                conditions.append(getattr(self.model, key) == value)
+
+        if conditions:
+            query = query.filter(and_(*conditions))
+
+        return query
+
     def get(self, id: UUID) -> Optional[ModelType]:
-        """Get a record by ID"""
         return self.db.query(self.model).filter(self.model.id == id).first()
 
     def get_multi(
-        self, *, skip: int = 0, limit: int = 100, filters: Optional[dict] = None
+        self,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        filters: Optional[dict[str, Any]] = None,
+        order_by: Optional[list[str]] = None,
     ) -> List[ModelType]:
-        """Get multiple records with optional filters"""
-        query = self.db.query(self.model)
 
-        if filters:
-            filter_conditions = []
-            for key, value in filters.items():
-                if hasattr(self.model, key) and value is not None:
-                    filter_conditions.append(getattr(self.model, key) == value)
-            if filter_conditions:
-                query = query.filter(and_(*filter_conditions))
+        query = self.db.query(self.model)
+        query = self.apply_filters(query, filters)
+
+        if order_by:
+            for item in order_by:
+                if item.startswith("-"):
+                    field_name = item[1:]
+                    if hasattr(self.model, field_name):
+                        query = query.order_by(desc(getattr(self.model, field_name)))
+                else:
+                    if hasattr(self.model, item):
+                        query = query.order_by(asc(getattr(self.model, item)))
 
         return query.offset(skip).limit(limit).all()
 
     def create(self, *, obj_in: CreateSchemaType) -> ModelType:
-        """Create a new record"""
         db_obj = self.model(**obj_in.model_dump())
-        self.db.add(db_obj)
-        self.db.commit()
-        self.db.refresh(db_obj)
+
+        try:
+            self.db.add(db_obj)
+            self.db.commit()
+            self.db.refresh(db_obj)
+        except SQLAlchemyError:
+            self.db.rollback()
+            raise
+
         return db_obj
 
     def update(self, *, db_obj: ModelType, obj_in: UpdateSchemaType) -> ModelType:
-        """Update an existing record"""
-        obj_data = (
-            obj_in.model_dump(exclude_unset=True)
-            if hasattr(obj_in, "model_dump")
-            else obj_in.__dict__
-        )
-        for field in obj_data:
+        obj_data = obj_in.model_dump(exclude_unset=True)
+
+        for field, value in obj_data.items():
             if hasattr(db_obj, field):
-                setattr(db_obj, field, obj_data[field])
-        self.db.add(db_obj)
-        self.db.commit()
-        self.db.refresh(db_obj)
+                setattr(db_obj, field, value)
+
+        try:
+            self.db.add(db_obj)
+            self.db.commit()
+            self.db.refresh(db_obj)
+        except SQLAlchemyError:
+            self.db.rollback()
+            raise
+
         return db_obj
 
     def delete(self, *, id: UUID) -> None:
-        """Delete a record by ID"""
         stmt = delete(self.model).where(self.model.id == id)
-        self.db.execute(stmt)
-        self.db.commit()
+
+        try:
+            self.db.execute(stmt)
+            self.db.commit()
+        except SQLAlchemyError:
+            self.db.rollback()
+            raise
 
     def count(self, filters: Optional[dict] = None) -> int:
-        """Count records with optional filters"""
         query = self.db.query(self.model)
-
-        if filters:
-            filter_conditions = []
-            if filter_conditions:
-                query = query.filter(and_(*filter_conditions))
-
-        
+        query = self.apply_filters(query, filters)
         return query.count()

@@ -1,6 +1,5 @@
-from typing import Generic, List, Optional, Type, TypeVar
+from typing import Generic, List, Optional, Type, TypeVar, Any
 from uuid import UUID
-
 from sqlalchemy.orm import Session
 
 from repositories.base import BaseRepository
@@ -22,15 +21,22 @@ class BaseService(
         repository_class: Type[RepositoryType],
     ):
         self.db = db
-        self.repository = repository_class(model=model, db=db)
+        self.repository: RepositoryType = repository_class(model=model, db=db)
 
     def get(self, id: UUID) -> Optional[ModelType]:
         return self.repository.get(id)
 
     def get_multi(
-        self, *, skip: int = 0, limit: int = 100, filters: Optional[dict] = None
+        self,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        filters: Optional[dict[str, Any]] = None,
+        order_by: Optional[list[str]] = None
     ) -> List[ModelType]:
-        return self.repository.get_multi(skip=skip, limit=limit, filters=filters)
+        return self.repository.get_multi(
+            skip=skip, limit=limit, filters=filters, order_by=order_by
+        )
 
     def create(self, *, payload: CreateSchemaType) -> ModelType:
         return self.repository.create(obj_in=payload)

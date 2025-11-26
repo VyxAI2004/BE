@@ -10,25 +10,6 @@ from shared.enums import ProjectStatusEnum
 
 from .base import BaseRepository
 
-class ProjectFilters(TypedDict, total=False):
-    """Project filters for comprehensive search"""
-    q: Optional[str]
-    name: Optional[str]
-    status: Optional[ProjectStatusEnum]
-    created_by: Optional[UUID]
-    assigned_to: Optional[UUID]
-    pipeline_type: Optional[str]
-from typing import List, Optional, Type, TypedDict
-from uuid import UUID
-
-from sqlalchemy import or_, and_
-from sqlalchemy.orm import Session
-
-from models.project import Project
-from schemas.project import ProjectCreate, ProjectUpdate
-from shared.enums import ProjectStatusEnum
-
-from .base import BaseRepository
 
 class ProjectFilters(TypedDict, total=False):
     """Project filters for comprehensive search"""
@@ -40,19 +21,20 @@ class ProjectFilters(TypedDict, total=False):
     pipeline_type: Optional[str]
     target_product_category: Optional[str]
 
+
 class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
     def __init__(self, model: Type[Project], db: Session):
         super().__init__(model, db)
 
-    def _apply_filters(self, query, filters: Optional[ProjectFilters] = None):
+    def apply_filters(self, query, filters: Optional[ProjectFilters] = None):
         if not filters:
             return query
 
         filter_conditions = []
-        
-        # Text search across multiple fields
+
+        # Full-text search
         if filters.get("q"):
-            q = filters.get("q")
+            q = filters["q"]
             filter_conditions.append(
                 or_(
                     Project.name.ilike(f"%{q}%"),
@@ -61,53 +43,37 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
                     Project.target_product_category.ilike(f"%{q}%"),
                 )
             )
-        
-        # Specific field filters
+
+        # Filter by name
         if filters.get("name"):
             filter_conditions.append(
-                Project.name.ilike(f"%{filters.get('name')}%")
+                Project.name.ilike(f"%{filters['name']}%")
             )
-        
-        if filters.get("status"):
-            filter_conditions.append(
-                Project.status == filters.get("status")
-            )
-        
-        if filters.get("created_by"):
-            filter_conditions.append(
-                Project.created_by == filters.get("created_by")
-            )
-        
-        if filters.get("assigned_to"):
-            filter_conditions.append(
-                Project.assigned_to == filters.get("assigned_to")
-            )
-        
-        if filters.get("pipeline_type"):
-            filter_conditions.append(
-                Project.pipeline_type == filters.get("pipeline_type")
-            )
-        
+
+        # Filter by product category
         if filters.get("target_product_category"):
             filter_conditions.append(
-                Project.target_product_category.ilike(f"%{filters.get('target_product_category')}%")
+                Project.target_product_category.ilike(
+                    f"%{filters['target_product_category']}%"
+                )
             )
 
+        # Apply custom filter conditions
         if filter_conditions:
             query = query.filter(and_(*filter_conditions))
-            
-        return query
 
-    def search(
-        self,
-        *,
-        filters: Optional[ProjectFilters] = None,
-        skip: int = 0,
-        limit: int = 100,
-    ) -> List[Project]:
-        db_query = self.db.query(Project)
-        db_query = self._apply_filters(db_query, filters)
-        return db_query.offset(skip).limit(limit).all()
+        # Standard filters passed to BaseRepository
+        standard_filters = {
+            key: value
+            for key, value in filters.items()
+            if key not in ["q", "name", "target_product_category"]
+            and value is not None
+        }
+
+        if standard_filters:
+            query = super().apply_filters(query, standard_filters)
+
+        return query
 
     def get_by_user(self, user_id: UUID, skip: int = 0, limit: int = 100) -> List[Project]:
         """Get projects created by or assigned to a specific user"""
@@ -124,8 +90,24 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
             .all()
         )
 
-    def count(self, filters: Optional[ProjectFilters] = None) -> int:
-        """Count projects with filters applied"""
-        query = self.db.query(Project)
-        query = self._apply_filters(query, filters)
-        return query.count()
+    def get_all_user_projects(self, user_id: UUID) -> List[Project]:
+        """Get all projects related to a user: creator, assignee, or member"""
+        from models.project import ProjectUser
+
+        query = (
+            self.db.query(Project)
+            .outerjoin(ProjectUser, Project.id == ProjectUser.project_id)
+            .filter(
+                or_(
+                    Project.created_by == user_id,
+                    Project.assigned_to == user_id,
+                    and_(
+                        ProjectUser.user_id == user_id,
+                        ProjectUser.is_active == True,
+                    ),
+                )
+            )
+            .distinct()
+        )
+
+        return query.all()

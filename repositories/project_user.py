@@ -44,11 +44,8 @@ class ProjectUserRepository(BaseRepository[ProjectUser, ProjectUserCreate, Proje
         """Deactivate a user's membership in a project"""
         project_user = self.get_by_project_and_user(project_id, user_id)
         if project_user:
-            project_user.is_active = False
-            self.db.add(project_user)
-            self.db.commit()
-            self.db.refresh(project_user)
-        return project_user
+            return self.update(db_obj=project_user, obj_in=ProjectUserUpdate(is_active=False))
+        return None
 
     def remove_membership(self, project_id: UUID, user_id: UUID) -> None:
         """Remove a user's membership from a project"""

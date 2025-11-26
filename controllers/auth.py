@@ -51,7 +51,7 @@ def get_profile(
     auth_service: AuthService = Depends(get_auth_service),
 ):
     """Get the profile of the authenticated user."""
-    user = auth_service.repository.get_by_email(email=user_from_token.email)
+    user = auth_service.get_by_email(email=user_from_token.email)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return UserResponse.model_validate(user)

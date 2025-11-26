@@ -14,8 +14,11 @@ from schemas.user import (
     UserCreate,
     UserUpdate,
 )
+from schemas.role import UserRoleCreate
 from services.sale_smart_ai_app.user import UserService
 from repositories.user import UserFilters
+from middlewares.permissions import check_global_permissions
+from shared.enums import GlobalPermissionEnum
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -109,3 +112,48 @@ def delete_user(
         return None
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== ROLE MANAGEMENT ENDPOINTS ====================
+
+@router.post("/{user_id}/roles/{role_id}", response_model=UserResponse)
+@check_global_permissions(GlobalPermissionEnum.ASSIGN_ROLES)
+def assign_role_to_user(
+    *,
+    user_id: uuid.UUID,
+    role_id: uuid.UUID,
+    user_service: UserService = Depends(get_user_service),
+    token: TokenData = Depends(verify_token),
+):
+    """Assign a role to a user (Admin only)"""
+    try:
+        user = user_service.assign_role_to_user(user_id=user_id, role_id=role_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        return user
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.delete("/{user_id}/roles/{role_id}", response_model=UserResponse)
+@check_global_permissions(GlobalPermissionEnum.ASSIGN_ROLES)
+def remove_role_from_user(
+    *,
+    user_id: uuid.UUID,
+    role_id: uuid.UUID,
+    user_service: UserService = Depends(get_user_service),
+    token: TokenData = Depends(verify_token),
+):
+    """Remove a role from a user (Admin only)"""
+    try:
+        user = user_service.remove_role_from_user(user_id=user_id, role_id=role_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        return user
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+

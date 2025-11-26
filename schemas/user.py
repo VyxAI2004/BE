@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional, List, Annotated
 from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field
+from schemas.role import UserRoleResponse
 
 class UserBase(BaseModel):
     """Base schema for User model"""
@@ -45,6 +46,7 @@ class UserResponse(UserBase):
     id: UUID
     created_at: datetime
     updated_at: datetime
+    roles: List[UserRoleResponse] = []
 
     class Config:
         from_attributes = True

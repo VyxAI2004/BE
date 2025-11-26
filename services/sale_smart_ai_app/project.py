@@ -13,54 +13,6 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectR
     def __init__(self, db: Session):
         super().__init__(db, Project, ProjectRepository)
 
-    def get_project(self, *, project_id: uuid.UUID) -> Optional[Project]:
-        """Get project by ID"""
-        return self.get(project_id)
-
-    def search(
-        self,
-        *,
-        q: Optional[str] = None,
-        name: Optional[str] = None,
-        status: Optional[ProjectStatusEnum] = None,
-        created_by: Optional[uuid.UUID] = None,
-        assigned_to: Optional[uuid.UUID] = None,
-        pipeline_type: Optional[str] = None,
-        target_product_category: Optional[str] = None,
-        skip: int = 0,
-        limit: int = 100,
-    ) -> List[Project]:
-        """Search projects with filters"""
-        filters: Optional[ProjectFilters] = None
-
-        filter_dict = {}
-        if q:
-            filter_dict["q"] = q
-        if name:
-            filter_dict["name"] = name
-        if status:
-            filter_dict["status"] = status
-        if created_by:
-            filter_dict["created_by"] = created_by
-        if assigned_to:
-            filter_dict["assigned_to"] = assigned_to
-        if pipeline_type:
-            filter_dict["pipeline_type"] = pipeline_type
-        if target_product_category:
-            filter_dict["target_product_category"] = target_product_category
-
-        if filter_dict:
-            filters = ProjectFilters(**filter_dict)
-
-        return self.repository.search(filters=filters, skip=skip, limit=limit)
-
-    def create_project(self, payload: ProjectCreate, created_by: uuid.UUID) -> Project:
-        """Create new project"""
-        # Add the created_by field to the payload
-        payload_dict = payload.model_dump() if hasattr(payload, 'model_dump') else payload.dict()
-        payload_dict["created_by"] = created_by
-        return self.create(payload=ProjectCreate(**payload_dict))
-
     def update_project(self, project_id: uuid.UUID, payload: ProjectUpdate, user_id: uuid.UUID) -> Optional[Project]:
         """Update project"""
         db_project = self.get(project_id)
@@ -85,6 +37,35 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectR
         if not permission_service.has_permission(user_id, "project:delete", project_id):
             raise ValueError("You don't have permission to delete this project")
         
+        # Actually delete the project
+        self.delete(id=project_id)
+
+    def get_user_projects(self, user_id: uuid.UUID, skip: int = 0, limit: int = 100) -> List[Project]:
+        """Get projects created by or assigned to a specific user"""
+        return self.repository.get_by_user(user_id=user_id, skip=skip, limit=limit)
+
+    def get_my_projects(self, user_id: uuid.UUID, skip: int = 0, limit: int = 100) -> tuple[List[Project], int]:
+        """Get all projects related to user: created, assigned, or member of
+        
+        Returns:
+            tuple: (paginated_projects, total_count)
+        """
+        # Get all projects related to user (repository handles the complex query)
+        all_projects = self.repository.get_all_user_projects(user_id=user_id)
+        
+        # Calculate total
+        total = len(all_projects)
+        
+        # Apply pagination
+        paginated_projects = all_projects[skip:skip + limit]
+        
+        return paginated_projects, total
+
+    def assign_project(self, project_id: uuid.UUID, assigned_to: uuid.UUID, user_id: uuid.UUID) -> Optional[Project]:
+        """Assign project to a single user (legacy method)"""
+        db_project = self.get(project_id)
+        if not db_project:
+            return None
         
         # Check permission
         permission_service = PermissionService(self.db)

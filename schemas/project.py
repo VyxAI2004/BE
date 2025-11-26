@@ -19,6 +19,7 @@ class ProjectBase(BaseModel):
     crawl_schedule: Optional[ScheduleEnum] = None
     assigned_to: Optional[UUID] = None
     assigned_model_id: Optional[UUID] = None
+    created_by: Optional[UUID] = None
     deadline: Optional[date] = None
 
 class ProjectCreate(ProjectBase):
