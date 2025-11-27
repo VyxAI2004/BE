@@ -61,3 +61,15 @@ class ListUsersResponse(BaseModel):
         from_attributes = True
 
     
+class UserPromoteRequest(BaseModel):
+    """Schema for promoting user to admin/super_admin"""
+    role_slug: Annotated[str, Field(pattern="^(admin|super_admin)$")]
+    reason: Optional[str] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "role_slug": "admin",
+                "reason": "Promoted to admin for managing projects"
+            }
+        }

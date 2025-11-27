@@ -181,6 +181,21 @@ class RoleRepository(BaseRepository[Role, RoleCreate, RoleUpdate]):
             self.db.refresh(role)
         return role
 
+    def check_user_has_role(self, *, user_id: str, role_id: str) -> bool:
+        """Check if user already has a specific role"""
+        existing = (
+            self.db.query(UserRole)
+            .filter_by(user_id=user_id, role_id=role_id)
+            .first()
+        )
+        return existing is not None
+
+    def get_admin_roles(self, *, slugs: List[str] = None) -> List[Role]:
+        """Get admin roles by slugs. Default to ['admin', 'super_admin']"""
+        if slugs is None:
+            slugs = ["admin", "super_admin"]
+        return self.db.query(Role).filter(Role.slug.in_(slugs)).all()
+
 
 class PermissionRepository(BaseRepository[Permission, PermissionCreate, PermissionUpdate]):
     def __init__(self, model: Type[Permission], db: Session):

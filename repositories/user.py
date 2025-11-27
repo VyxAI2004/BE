@@ -91,3 +91,22 @@ class UserRepository(BaseRepository[User, UserCreate , UserUpdate ]):
             self.db.delete(user_role)
             self.db.commit()
         return self.get(user_id)
+
+    def remove_admin_roles(self, user_id: str, admin_role_ids: list[str]) -> None:
+        """Remove all admin-level roles from a user"""
+        self.db.query(UserRole).filter(
+            UserRole.user_id == user_id,
+            UserRole.role_id.in_(admin_role_ids)
+        ).delete(synchronize_session=False)
+        self.db.commit()
+
+    def assign_role_with_reason(
+        self, user_id: str, role_id: str, reason: str = None
+    ) -> User:
+        """Assign a role to user with optional reason"""
+        user_role = UserRole(
+            user_id=user_id, role_id=role_id, assigned_reason=reason
+        )
+        self.db.add(user_role)
+        self.db.commit()
+        return self.get(user_id)

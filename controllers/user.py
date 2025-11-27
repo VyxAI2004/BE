@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Header
 from sqlalchemy.orm import Session
 from core.dependencies.auth import verify_token
 from core.dependencies.db import get_db
@@ -13,12 +13,14 @@ from schemas.user import (
     UserResponse,
     UserCreate,
     UserUpdate,
+    UserPromoteRequest,
 )
 from schemas.role import UserRoleCreate
 from services.sale_smart_ai_app.user import UserService
 from repositories.user import UserFilters
 from middlewares.permissions import check_global_permissions
-from shared.enums import GlobalPermissionEnum
+from shared.enums import GlobalPermissionEnum, RoleEnum
+from core.settings import settings
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -157,3 +159,69 @@ def remove_role_from_user(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
+
+@router.post("/{user_id}/promote", response_model=UserResponse)
+def promote_user_to_admin(
+    *,
+    user_id: uuid.UUID,
+    payload: UserPromoteRequest,
+    x_admin_secret: str = Header(..., alias="X-Admin-Secret"),
+    user_service: UserService = Depends(get_user_service),
+    token: TokenData = Depends(verify_token),
+    db: Session = Depends(get_db),
+):
+    """
+    Promote user to admin or super_admin role
+    
+    Requires:
+    1. Super Admin role (via JWT token)
+    2. Admin Secret Key (via X-Admin-Secret header)
+    
+    This is a highly privileged operation and should be used with caution.
+    """
+    try:
+        # 1. Validate Admin Secret Key
+        if not settings.validate_admin_secret_key(x_admin_secret):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid admin secret key"
+            )
+        
+        # 2. Check if requester is Super Admin
+        from services.sale_smart_ai_app.permission import PermissionService
+        permission_service = PermissionService(db)
+        user_permissions = permission_service.get_user_permissions(user_id=token.user_id)
+        
+        # Get user roles to check if super admin
+        from models.role import UserRole, Role
+        user_roles = db.query(Role).join(UserRole).filter(
+            UserRole.user_id == token.user_id
+        ).all()
+        
+        is_super_admin = any(role.slug == RoleEnum.SUPER_ADMIN for role in user_roles)
+        
+        if not is_super_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only Super Admin can promote users to admin/super_admin roles"
+            )
+        
+        # 3. Promote user
+        user = user_service.promote_user_to_admin(
+            user_id=user_id,
+            role_slug=payload.role_slug,
+            promoted_by=token.user_id,
+            reason=payload.reason
+        )
+        
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        
+        return user
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

@@ -62,8 +62,16 @@ def get_list_projects(
     project_service: ProjectService = Depends(get_project_service),
     user_from_token: TokenData = Depends(verify_token),
 ):
-    """List projects with filters and pagination"""
     try:
+        user_roles = user_from_token.roles if hasattr(user_from_token, 'roles') else []
+        is_admin = any(role in ["Admin", "Super Admin"] for role in user_roles)
+        
+        if not is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only Admin or Super Admin can view all projects. Use GET /projects/my to see your projects."
+            )
+        
         filters_dict = {}
         if q:
             filters_dict["q"] = q
