@@ -60,3 +60,89 @@ Trả về JSON:
     ]
 }}
 """
+
+ANALYZE_PRODUCTS_PROMPT = """
+Bạn là chuyên gia tư vấn mua sắm. Hãy tìm kiếm và đề xuất các sản phẩm nổi bật phù hợp với yêu cầu sau:
+
+- Từ khóa: {search_keyword}
+- Mô tả chi tiết: {description}
+- Ngân sách: {budget_text}
+
+Yêu cầu:
+1. Tìm {limit} sản phẩm được đánh giá cao, phổ biến trên thị trường.
+2. Ưu tiên các thương hiệu uy tín hoặc sản phẩm có review tốt.
+3. Phân tích ngắn gọn ưu điểm của từng sản phẩm.
+
+Trả về JSON (chỉ JSON thuần, không markdown, không giải thích thêm):
+{{
+    "analysis": "Nhận định chung về thị trường và xu hướng cho dòng sản phẩm này",
+    "products": [
+        {{
+            "name": "Tên đầy đủ và chính xác của sản phẩm",
+            "estimated_price": 100000,
+            "features": ["tính năng 1", "tính năng 2"],
+            "reason": "Lý do đề xuất"
+        }}
+    ]
+}}
+"""
+
+GENERATE_LINKS_PROMPT = """
+Dựa trên danh sách sản phẩm sau, hãy tạo link tìm kiếm cho từng sản phẩm trên các sàn thương mại điện tử.
+
+Danh sách sản phẩm:
+{products_json}
+
+Platform được chọn: {platform}
+
+Yêu cầu tạo link:
+
+1. **Nếu platform = "shopee"** hoặc "all" (bao gồm Shopee):
+   Format: https://shopee.vn/search?keyword={{tên_sản_phẩm_encoded}}
+   Ví dụ: https://shopee.vn/search?keyword=ca%20phe%20robusta%20rang%20xay
+
+2. **Nếu platform = "lazada"** hoặc "all" (bao gồm Lazada):
+   Format: https://www.lazada.vn/catalog/?q={{tên_sản_phẩm_encoded}}
+   Ví dụ: https://www.lazada.vn/catalog/?q=ca%20phe%20robusta%20rang%20xay
+
+3. **Nếu platform = "tiki"** hoặc "all" (bao gồm Tiki):
+   Format: https://tiki.vn/search?q={{tên_sản_phẩm_encoded}}
+   Ví dụ: https://tiki.vn/search?q=ca%20phe%20robusta%20rang%20xay
+
+Quy tắc encode tên sản phẩm:
+- Space → %20
+- Ký tự đặc biệt tiếng Việt → encode URL chuẩn
+- Chỉ dùng TÊN SẢN PHẨM chính, ngắn gọn
+
+Trả về JSON (chỉ JSON thuần, không markdown):
+- Nếu platform = "shopee", "lazada", hoặc "tiki": Chỉ 1 URL cho platform đó
+- Nếu platform = "all": Trả về object với URLs cho cả 3 platforms
+
+**Format khi platform cụ thể (shopee/lazada/tiki):**
+{{
+    "products": [
+        {{
+            "name": "Tên sản phẩm",
+            "estimated_price": 100000,
+            "url": "https://... (URL của platform được chọn)"
+        }}
+    ]
+}}
+
+**Format khi platform = "all":**
+{{
+    "products": [
+        {{
+            "name": "Tên sản phẩm",
+            "estimated_price": 100000,
+            "urls": {{
+                "shopee": "https://shopee.vn/search?keyword=...",
+                "lazada": "https://www.lazada.vn/catalog/?q=...",
+                "tiki": "https://tiki.vn/search?q=..."
+            }}
+        }}
+    ]
+}}
+"""
+
+

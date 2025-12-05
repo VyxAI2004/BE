@@ -9,13 +9,15 @@ from schemas.role import (
     PermissionCreate, 
     PermissionUpdate,
 )
-from repositories.role import RoleRepository, PermissionRepository, RoleFilters, PermissionFilters
+from repositories.role import RoleRepository, RoleFilters
+from repositories.permission import PermissionRepository, PermissionFilters
 from .base import BaseService
 
 
 class RoleService(BaseService[Role, RoleCreate, RoleUpdate, RoleRepository]):
     def __init__(self, db: Session):
         super().__init__(db, Role, RoleRepository)
+        self.permission_repository = PermissionRepository(db)
 
     def get_role(self, *, role_id: uuid.UUID) -> Optional[Role]:
         """Get role by ID"""
@@ -148,7 +150,7 @@ class RoleService(BaseService[Role, RoleCreate, RoleUpdate, RoleRepository]):
         
         # Verify all permissions exist
         for perm_id in permission_ids:
-            perm = self.db.query(Permission).filter(Permission.id == perm_id).first()
+            perm = self.permission_repository.get(perm_id)
             if not perm:
                 raise ValueError(f"Permission with ID {perm_id} not found")
 
@@ -171,115 +173,4 @@ class RoleService(BaseService[Role, RoleCreate, RoleUpdate, RoleRepository]):
         return self.repository.count_by_filters(filters=filters)
 
 
-class PermissionService(BaseService[Permission, PermissionCreate, PermissionUpdate, PermissionRepository]):
-    def __init__(self, db: Session):
-        super().__init__(db, Permission, PermissionRepository)
 
-    def get_permission(self, *, permission_id: uuid.UUID) -> Optional[Permission]:
-        """Get permission by ID"""
-        return self.get(permission_id)
-
-    def get_permission_by_slug(self, *, slug: str) -> Optional[Permission]:
-        """Get permission by slug"""
-        return self.repository.get_by_slug(slug=slug)
-
-    def get_permission_by_name(self, *, name: str) -> Optional[Permission]:
-        """Get permission by name"""
-        return self.repository.get_by_name(name=name)
-
-    def search(
-        self,
-        *,
-        q: Optional[str] = None,
-        name: Optional[str] = None,
-        slug: Optional[str] = None,
-        category: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        skip: int = 0,
-        limit: int = 100,
-    ) -> List[Permission]:
-        """Search permissions with filters"""
-        filters: Optional[PermissionFilters] = None
-        filter_dict = {}
-        
-        if q:
-            filter_dict["q"] = q
-        if name:
-            filter_dict["name"] = name
-        if slug:
-            filter_dict["slug"] = slug
-        if category:
-            filter_dict["category"] = category
-        if is_active is not None:
-            filter_dict["is_active"] = is_active
-
-        if filter_dict:
-            filters = PermissionFilters(**filter_dict)
-
-        return self.repository.search(filters=filters, skip=skip, limit=limit)
-
-    def get_permissions_by_category(self, category: str) -> List[Permission]:
-        """Get all permissions by category"""
-        return self.repository.get_by_category(category)
-
-    def create_permission(self, payload: PermissionCreate) -> Permission:
-        """Create new permission"""
-        # Check if permission name already exists
-        existing_perm = self.repository.get_by_name(name=payload.name)
-        if existing_perm:
-            raise ValueError(f"Permission with name '{payload.name}' already exists")
-
-        # Check if permission slug already exists
-        existing_slug = self.repository.get_by_slug(slug=payload.slug)
-        if existing_slug:
-            raise ValueError(f"Permission with slug '{payload.slug}' already exists")
-
-        return self.create(payload=payload)
-
-    def update_permission(
-        self,
-        permission_id: uuid.UUID,
-        payload: PermissionUpdate,
-    ) -> Optional[Permission]:
-        """Update permission"""
-        db_perm = self.get(permission_id)
-        if not db_perm:
-            return None
-
-        # Check if trying to update system permission
-        if db_perm.is_system_permission:
-            raise ValueError("Cannot update system permission")
-
-        # Check if new name conflicts
-        if payload.name and payload.name != db_perm.name:
-            existing_perm = self.repository.get_by_name(name=payload.name)
-            if existing_perm:
-                raise ValueError(f"Permission with name '{payload.name}' already exists")
-
-        return self.update(db_obj=db_perm, payload=payload)
-
-    def delete_permission(self, permission_id: uuid.UUID) -> None:
-        """Delete permission (cannot delete system permissions)"""
-        db_perm = self.get(permission_id)
-        if not db_perm:
-            raise ValueError("Permission not found")
-
-        if db_perm.is_system_permission:
-            raise ValueError("Cannot delete system permission")
-
-        self.delete(id=permission_id)
-
-    def activate_permission(self, permission_id: uuid.UUID) -> Optional[Permission]:
-        """Activate a permission"""
-        return self.repository.activate_permission(permission_id)
-
-    def deactivate_permission(self, permission_id: uuid.UUID) -> Optional[Permission]:
-        """Deactivate a permission (cannot deactivate system permissions)"""
-        db_perm = self.get(permission_id)
-        if db_perm and db_perm.is_system_permission:
-            raise ValueError("Cannot deactivate system permission")
-        return self.repository.deactivate_permission(permission_id)
-
-    def count_permissions(self, *, filters: Optional[PermissionFilters] = None) -> int:
-        """Count permissions with filters"""
-        return self.repository.count_by_filters(filters=filters)

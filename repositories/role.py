@@ -4,7 +4,7 @@ from sqlalchemy import or_, and_, func
 from sqlalchemy.orm import Session
 
 from models.role import Role, Permission, UserRole, RolePermission
-from schemas.role import RoleCreate, RoleUpdate, PermissionCreate, PermissionUpdate
+from schemas.role import RoleCreate, RoleUpdate
 
 from .base import BaseRepository
 
@@ -17,15 +17,6 @@ class RoleFilters(TypedDict, total=False):
     category: Optional[str]
     is_active: Optional[bool]
     is_system_role: Optional[bool]
-
-
-class PermissionFilters(TypedDict, total=False):
-    """Permission filters for comprehensive search"""
-    q: Optional[str]
-    name: Optional[str]
-    slug: Optional[str]
-    category: Optional[str]
-    is_active: Optional[bool]
 
 
 class RoleRepository(BaseRepository[Role, RoleCreate, RoleUpdate]):
@@ -195,115 +186,3 @@ class RoleRepository(BaseRepository[Role, RoleCreate, RoleUpdate]):
         if slugs is None:
             slugs = ["admin", "super_admin"]
         return self.db.query(Role).filter(Role.slug.in_(slugs)).all()
-
-
-class PermissionRepository(BaseRepository[Permission, PermissionCreate, PermissionUpdate]):
-    def __init__(self, model: Type[Permission], db: Session):
-        super().__init__(model, db)
-
-    def search(
-        self,
-        *,
-        filters: Optional[PermissionFilters] = None,
-        skip: int = 0,
-        limit: int = 100,
-    ) -> List[Permission]:
-        """Search permissions with filters"""
-        db_query = self.db.query(Permission)
-
-        if filters:
-            filter_conditions = []
-            
-            if filters.get("q"):
-                query = filters.get("q")
-                filter_conditions.append(
-                    or_(
-                        Permission.name.ilike(f"%{query}%"),
-                        Permission.slug.ilike(f"%{query}%"),
-                        Permission.description.ilike(f"%{query}%"),
-                    )
-                )
-            
-            if filters.get("name"):
-                filter_conditions.append(Permission.name.ilike(f"%{filters.get('name')}%"))
-            
-            if filters.get("slug"):
-                filter_conditions.append(Permission.slug == filters.get("slug"))
-            
-            if filters.get("category"):
-                filter_conditions.append(Permission.category == filters.get("category"))
-            
-            if filters.get("is_active") is not None:
-                filter_conditions.append(Permission.is_active == filters.get("is_active"))
-            
-            if filter_conditions:
-                db_query = db_query.filter(and_(*filter_conditions))
-
-        return db_query.order_by(Permission.category, Permission.name).offset(skip).limit(limit).all()
-
-    def get_by_slug(self, *, slug: str) -> Optional[Permission]:
-        """Get permission by slug"""
-        return self.db.query(Permission).filter(Permission.slug == slug).first()
-
-    def get_by_name(self, *, name: str) -> Optional[Permission]:
-        """Get permission by name"""
-        return self.db.query(Permission).filter(Permission.name == name).first()
-
-    def get_by_category(self, category: str) -> List[Permission]:
-        """Get all permissions by category"""
-        return self.db.query(Permission).filter(
-            Permission.category == category,
-            Permission.is_active == True
-        ).order_by(Permission.name).all()
-
-    def count_by_filters(self, *, filters: Optional[PermissionFilters] = None) -> int:
-        """Count permissions with filters"""
-        db_query = self.db.query(func.count(Permission.id))
-
-        if filters:
-            filter_conditions = []
-            
-            if filters.get("q"):
-                query = filters.get("q")
-                filter_conditions.append(
-                    or_(
-                        Permission.name.ilike(f"%{query}%"),
-                        Permission.slug.ilike(f"%{query}%"),
-                        Permission.description.ilike(f"%{query}%"),
-                    )
-                )
-            
-            if filters.get("name"):
-                filter_conditions.append(Permission.name.ilike(f"%{filters.get('name')}%"))
-            
-            if filters.get("slug"):
-                filter_conditions.append(Permission.slug == filters.get("slug"))
-            
-            if filters.get("category"):
-                filter_conditions.append(Permission.category == filters.get("category"))
-            
-            if filters.get("is_active") is not None:
-                filter_conditions.append(Permission.is_active == filters.get("is_active"))
-            
-            if filter_conditions:
-                db_query = db_query.filter(and_(*filter_conditions))
-
-        return db_query.scalar() or 0
-
-    def activate_permission(self, permission_id: str) -> Optional[Permission]:
-        """Activate a permission"""
-        perm = self.get(permission_id)
-        if perm and not perm.is_system_permission:
-            perm.is_active = True
-            self.db.commit()
-            self.db.refresh(perm)
-        return perm
-
-    def deactivate_permission(self, permission_id: str) -> Optional[Permission]:
-        """Deactivate a permission (system permissions cannot be deactivated)"""
-        perm = self.get(permission_id)
-        if perm and not perm.is_system_permission:
-            perm.is_active = False
-            self.db.commit()
-            self.db.refresh(perm)
-        return perm

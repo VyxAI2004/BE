@@ -6,6 +6,7 @@ from .project import router as project_router
 from .ai_model import router as ai_model_router
 from .user_ai_model import router as user_ai_model_router
 from .role import router as role_router
+from .permission import router as permission_router
 from .product import router as product_router
 from .product_ai import router as product_ai_router
 
@@ -19,5 +20,6 @@ api_router.include_router(project_router)
 api_router.include_router(ai_model_router)
 api_router.include_router(user_ai_model_router)
 api_router.include_router(role_router)
+api_router.include_router(permission_router)
 api_router.include_router(product_router)
 api_router.include_router(product_ai_router)
