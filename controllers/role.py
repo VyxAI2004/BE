@@ -4,25 +4,18 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from core.dependencies.auth import verify_token
 from schemas.auth import TokenData
-from core.dependencies.services import get_role_service, get_permission_service
+from core.dependencies.services import get_role_service
 from schemas.role import (
     ListRolesResponse,
     RoleResponse,
     RoleDetailResponse,
-    ListRoleDetailsResponse,
     RoleCreate,
     RoleUpdate,
-    ListPermissionsResponse,
-    PermissionResponse,
-    PermissionCreate,
-    PermissionUpdate,
-    BulkAssignRoleRequest,
-    BulkAssignRoleResponse,
     RolePermissionAssignRequest,
     RolePermissionRemoveRequest,
 )
-from services.core.role import RoleService, PermissionService
-from repositories.role import RoleFilters, PermissionFilters
+from services.core.role import RoleService
+from repositories.role import RoleFilters
 from middlewares.permissions import check_global_permissions
 from shared.enums import GlobalPermissionEnum
 
@@ -233,183 +226,4 @@ def remove_permissions_from_role(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-# ==================== PERMISSION ENDPOINTS ====================
 
-# Admin only: Create permission
-@router.post("/permissions/", response_model=PermissionResponse, status_code=status.HTTP_201_CREATED)
-@check_global_permissions(GlobalPermissionEnum.MANAGE_ROLES)
-def create_permission(
-    *,
-    payload: PermissionCreate,
-    permission_service: PermissionService = Depends(get_permission_service),
-    token: TokenData = Depends(verify_token),
-):
-    """Create a new permission (Admin only)"""
-    try:
-        permission = permission_service.create_permission(payload=payload)
-        return permission
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-
-# Admin only: List permissions
-@router.get("/permissions/", response_model=ListPermissionsResponse)
-@check_global_permissions(GlobalPermissionEnum.MANAGE_ROLES)
-def list_permissions(
-    *,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
-    q: Optional[str] = Query(None, description="Search by name or slug"),
-    category: Optional[str] = Query(None, description="Filter by category"),
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    permission_service: PermissionService = Depends(get_permission_service),
-    token: TokenData = Depends(verify_token),
-):
-    """List all permissions (Admin only)"""
-    try:
-        permissions = permission_service.search(
-            q=q,
-            category=category,
-            is_active=is_active,
-            skip=skip,
-            limit=limit,
-        )
-        
-        filters_dict = {}
-        if q:
-            filters_dict["q"] = q
-        if category:
-            filters_dict["category"] = category
-        if is_active is not None:
-            filters_dict["is_active"] = is_active
-        
-        filters = PermissionFilters(**filters_dict) if filters_dict else None
-        total = permission_service.count_permissions(filters=filters)
-        
-        return ListPermissionsResponse(
-            total=total,
-            items=[PermissionResponse.model_validate(perm) for perm in permissions]
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-
-# Admin only: Get permission by ID
-@router.get("/permissions/{permission_id}", response_model=PermissionResponse)
-@check_global_permissions(GlobalPermissionEnum.MANAGE_ROLES)
-def get_permission(
-    *,
-    permission_id: uuid.UUID,
-    permission_service: PermissionService = Depends(get_permission_service),
-    token: TokenData = Depends(verify_token),
-):
-    """Get permission by ID (Admin only)"""
-    permission = permission_service.get_permission(permission_id=permission_id)
-    if not permission:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found")
-    return permission
-
-
-# Admin only: Update permission
-@router.patch("/permissions/{permission_id}", response_model=PermissionResponse)
-@check_global_permissions(GlobalPermissionEnum.MANAGE_ROLES)
-def update_permission(
-    *,
-    permission_id: uuid.UUID,
-    payload: PermissionUpdate,
-    permission_service: PermissionService = Depends(get_permission_service),
-    token: TokenData = Depends(verify_token),
-):
-    """Update permission (Admin only)"""
-    try:
-        permission = permission_service.update_permission(permission_id=permission_id, payload=payload)
-        if not permission:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found")
-        return permission
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-
-# Admin only: Delete permission
-@router.delete("/permissions/{permission_id}", status_code=status.HTTP_204_NO_CONTENT)
-@check_global_permissions(GlobalPermissionEnum.MANAGE_ROLES)
-def delete_permission(
-    *,
-    permission_id: uuid.UUID,
-    permission_service: PermissionService = Depends(get_permission_service),
-    token: TokenData = Depends(verify_token),
-):
-    """Delete permission (Admin only, cannot delete system permissions)"""
-    try:
-        permission_service.delete_permission(permission_id=permission_id)
-        return None
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-
-# Admin only: Activate permission
-@router.post("/permissions/{permission_id}/activate", response_model=PermissionResponse)
-@check_global_permissions(GlobalPermissionEnum.MANAGE_ROLES)
-def activate_permission(
-    *,
-    permission_id: uuid.UUID,
-    permission_service: PermissionService = Depends(get_permission_service),
-    token: TokenData = Depends(verify_token),
-):
-    """Activate a permission (Admin only)"""
-    try:
-        permission = permission_service.activate_permission(permission_id=permission_id)
-        if not permission:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found")
-        return permission
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-
-# Admin only: Deactivate permission
-@router.post("/permissions/{permission_id}/deactivate", response_model=PermissionResponse)
-@check_global_permissions(GlobalPermissionEnum.MANAGE_ROLES)
-def deactivate_permission(
-    *,
-    permission_id: uuid.UUID,
-    permission_service: PermissionService = Depends(get_permission_service),
-    token: TokenData = Depends(verify_token),
-):
-    """Deactivate a permission (Admin only, cannot deactivate system permissions)"""
-    try:
-        permission = permission_service.deactivate_permission(permission_id=permission_id)
-        if not permission:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found")
-        return permission
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-
-# Admin only: Get permissions by category
-@router.get("/permissions/categories/{category}", response_model=ListPermissionsResponse)
-@check_global_permissions(GlobalPermissionEnum.MANAGE_ROLES)
-def get_permissions_by_category(
-    *,
-    category: str,
-    permission_service: PermissionService = Depends(get_permission_service),
-    token: TokenData = Depends(verify_token),
-):
-    """Get all permissions by category (Admin only)"""
-    try:
-        permissions = permission_service.get_permissions_by_category(category=category)
-        return ListPermissionsResponse(
-            total=len(permissions),
-            items=[PermissionResponse.model_validate(perm) for perm in permissions]
-        )
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

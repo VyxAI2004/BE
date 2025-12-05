@@ -1,19 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from uuid import UUID
+from typing import Optional
 import json
 
 from core.dependencies.auth import verify_token
 from core.dependencies.services import get_project_service
 from schemas.auth import TokenData
+from schemas.product_ai import ProductSearchResponse
 from services.core.project import ProjectService
 from services.features.product_intelligence.agents import ProductAIAgent  # New clean module
 
 router = APIRouter(prefix="/products/ai", tags=["Product AI"])
 
-@router.get("/search/{project_id}")
+@router.get("/search/{project_id}", response_model=ProductSearchResponse)
 def ai_search_products_for_project(
     project_id: UUID,
     limit: int = 10,
+    platform: str = Query(
+        default="all",
+        description="E-commerce platform: 'shopee', 'lazada', 'tiki', or 'all'",
+        pattern="^(shopee|lazada|tiki|all)$"
+    ),
     project_service: ProjectService = Depends(get_project_service),
     token: TokenData = Depends(verify_token),
 ):
@@ -32,7 +39,7 @@ def ai_search_products_for_project(
 
     try:
         agent = ProductAIAgent(db=project_service.db)
-        return agent.search_products(project_info, token.user_id, limit)
+        return agent.search_products(project_info, token.user_id, limit, platform)
         
     except ImportError as e:
         raise HTTPException(
