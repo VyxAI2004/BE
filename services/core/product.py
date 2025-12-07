@@ -11,6 +11,19 @@ class ProductService(BaseService[Product, ProductCreate, ProductUpdate, ProductR
     def __init__(self, db: Session):
         super().__init__(db, Product, ProductRepository)
 
+    def _clean_url(self, url: str) -> str:
+        """Strip query parameters from URL to save space and remove tracking info"""
+        if not url:
+            return url
+        try:
+            # Simple cleaning for common platforms
+            if "shopee.vn" in url or "lazada.vn" in url or "tiki.vn" in url:
+                if "?" in url:
+                    return url.split("?")[0]
+        except:
+            pass
+        return url
+
     def create_product(self, payload: ProductCreate, user_id: uuid.UUID) -> Product:
         """Create a new product"""
         # Check permission on project
@@ -18,7 +31,26 @@ class ProductService(BaseService[Product, ProductCreate, ProductUpdate, ProductR
         if not permission_service.has_permission(user_id, "project:manage_products", payload.project_id):
             raise ValueError("You don't have permission to add products to this project")
         
-        return self.create(payload)
+        # Clean URL
+        if payload.url:
+             payload.url = self._clean_url(payload.url)
+
+        # Auto-detect platform if not provided or if it's the default "string"
+        if (not payload.platform or payload.platform == "string") and payload.url:
+            if "shopee" in payload.url.lower():
+                payload.platform = "shopee"
+            elif "lazada" in payload.url.lower():
+                payload.platform = "lazada"
+            elif "tiki" in payload.url.lower():
+                payload.platform = "tiki"
+            else:
+                payload.platform = "other"
+
+        # Ensure current_price is set
+        if payload.current_price is None:
+            payload.current_price = 0.0
+
+        return self.create(payload=payload)
 
     def update_product(self, product_id: uuid.UUID, payload: ProductUpdate, user_id: uuid.UUID) -> Optional[Product]:
         """Update product"""

@@ -38,3 +38,19 @@ def get_permission_service(db: Session = Depends(get_db)):
 def get_product_service(db: Session = Depends(get_db)):
     from services.core.product import ProductService
     return ProductService(db)
+
+def get_product_review_service(db: Session = Depends(get_db)):
+    from services.core.product_review import ProductReviewService
+    return ProductReviewService(db)
+
+def get_review_analysis_service(db: Session = Depends(get_db)):
+    from services.core.review_analysis import ReviewAnalysisService
+    return ReviewAnalysisService(db)
+
+def get_product_trust_score_service(db: Session = Depends(get_db)):
+    from services.core.product_trust_score import ProductTrustScoreService
+    return ProductTrustScoreService(db)
+
+def get_crawler_service(db: Session = Depends(get_db)):
+    from services.features.product_intelligence.crawler.crawler_service import CrawlerService
+    return CrawlerService(db)

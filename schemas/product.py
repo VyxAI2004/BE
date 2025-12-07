@@ -27,6 +27,9 @@ class ProductCreate(ProductBase):
     project_id: UUID
     product_source_id: Optional[UUID] = None
     crawl_session_id: Optional[UUID] = None
+    # Allow minimal creation
+    platform: Optional[Annotated[str, Field(max_length=50)]] = None
+    current_price: Optional[float] = 0.0
 
 class ProductUpdate(BaseModel):
     """Schema for updating product information"""

@@ -27,8 +27,14 @@ class ProductRepository(BaseRepository[Product, ProductCreate, ProductUpdate]):
         super().__init__(model, db)
 
     def apply_filters(self, query, filters: Optional[ProductFilters] = None):
+        # Initialize filter conditions list
+        filter_conditions = []
+        
         # Create a copy to avoid modifying the original filters
-        filters_copy = filters.copy()
+        if filters is None:
+            filters_copy = {}
+        else:
+            filters_copy = filters.copy()
 
         # Full-text search
         if filters_copy.get("q"):

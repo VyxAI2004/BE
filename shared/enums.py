@@ -104,6 +104,7 @@ class PlatformEnum(str, Enum):
     TIKI = "tiki"
     AMAZON = "amazon"
     CUSTOM = "custom"
+    ALL = "all"
 
 class CrawlStatusEnum(str, Enum):
     """Trạng thái của phiên Crawl."""

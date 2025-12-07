@@ -8,7 +8,8 @@ from core.dependencies.services import get_project_service
 from schemas.auth import TokenData
 from schemas.product_ai import ProductSearchResponse
 from services.core.project import ProjectService
-from services.features.product_intelligence.agents import ProductAIAgent  # New clean module
+from services.features.product_intelligence.agents import ProductAIAgent 
+from shared.enums import PlatformEnum
 
 router = APIRouter(prefix="/products/ai", tags=["Product AI"])
 
@@ -16,15 +17,13 @@ router = APIRouter(prefix="/products/ai", tags=["Product AI"])
 def ai_search_products_for_project(
     project_id: UUID,
     limit: int = 10,
-    platform: str = Query(
-        default="all",
+    platform: PlatformEnum = Query(
+        default=PlatformEnum.ALL,
         description="E-commerce platform: 'shopee', 'lazada', 'tiki', or 'all'",
-        pattern="^(shopee|lazada|tiki|all)$"
     ),
     project_service: ProjectService = Depends(get_project_service),
     token: TokenData = Depends(verify_token),
 ):
-    # 1. Get project info
     project = project_service.get(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")

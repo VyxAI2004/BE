@@ -9,19 +9,19 @@ Mở rộng hệ thống Product để tính toán **điểm tin cậy (Trust Sc
 
 ### Kiến trúc hệ thống
 ```
-LLM Search → Product URLs → BeautifulSoup Crawler → Product + Reviews
-                                                           ↓
-                                                    Save to Database
-                                                           ↓
-                                            AI Models Service (External)
-                                            ├─ Sentiment Analysis API
-                                            └─ Spam Detection API
-                                                           ↓
-                                                  Review Analysis Results
-                                                           ↓
-                                                Trust Score Calculation
-                                                           ↓
-                                                  Update Product Score
+LLM Search → Product filter → Product URLs → BeautifulSoup Crawler → Product + Reviews
+                                                                                     ↓
+                                                                             Save to Database
+                                                                                     ↓
+                                                                        AI Models Service (External)
+                                                                        ├─ Sentiment Analysis API
+                                                                        └─ Spam Detection API
+                                                                                     ↓
+                                                                        Review Analysis Results
+                                                                                     ↓
+                                                                        Trust Score Calculation
+                                                                                     ↓
+                                                                        Update Product Score
 ```
 
 ---
@@ -50,14 +50,6 @@ class ProductReview(Base):
     # Platform Information
     platform: String(50)                # shopee/lazada/tiki
     source_url: String(500)             # Link gốc của review
-    
-    # Verification & Engagement
-    is_verified_purchase: Boolean       # Mua hàng xác thực
-    helpful_count: Integer              # Số lượt hữu ích
-    
-    # Media
-    images: JSONB                       # Ảnh đính kèm
-    # Format: ["url1", "url2", ...]
     
     # Crawl Metadata
     crawled_at: DateTime                # Thời gian crawl
