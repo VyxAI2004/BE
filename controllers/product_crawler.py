@@ -45,8 +45,8 @@ def crawl_product_reviews(
             product_id=request.product_id,
             review_limit=request.review_limit
         )
-        if result.get("status") == "failed":
-            raise HTTPException(status_code=400, detail=result.get("message"))
+        if result.status == "failed":
+            raise HTTPException(status_code=400, detail=result.message)
         return result
     except HTTPException:
         raise

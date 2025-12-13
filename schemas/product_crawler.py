@@ -12,6 +12,13 @@ class CrawlReviewsRequest(BaseModel):
     product_id: UUID
     review_limit: int = Field(default=30, ge=0, le=100)
 
+# Respone Schemas
+class CrawlProductReviewsResponse(BaseModel):
+    product_id: Optional[UUID] = None
+    reviews_crawled: int = 0
+    status: str
+    message: Optional[str] = None
+
 # Scraper Output Schemas
 class CrawledProductItem(BaseModel):
     name: str

@@ -11,6 +11,8 @@ from core.dependencies.auth import verify_token
 from core.dependencies.services import (
     get_product_trust_score_service,
     get_product_service,
+    get_product_review_service,
+    get_review_analysis_service,
 )
 from schemas.auth import TokenData
 from schemas.trust_score import (
@@ -19,13 +21,10 @@ from schemas.trust_score import (
 )
 from services.core.product_trust_score import ProductTrustScoreService
 from services.core.product import ProductService
+from services.core.product_review import ProductReviewService
+from services.core.review_analysis import ReviewAnalysisService
 
 router = APIRouter(prefix="/products", tags=["Trust Score"])
-
-
-# =============================================================================
-# TRUST SCORE ENDPOINTS
-# =============================================================================
 
 @router.get("/{product_id}/trust-score", response_model=ProductTrustScoreResponse)
 def get_trust_score(
@@ -34,12 +33,7 @@ def get_trust_score(
     product_service: ProductService = Depends(get_product_service),
     token: TokenData = Depends(verify_token),
 ):
-    """
-    Lấy Trust Score của một product.
-    
-    Returns trust score cơ bản với các thống kê.
-    """
-    # Verify product exists
+
     product = product_service.get(product_id)
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
@@ -61,15 +55,7 @@ def get_trust_score_detail(
     product_service: ProductService = Depends(get_product_service),
     token: TokenData = Depends(verify_token),
 ):
-    """
-    Lấy Trust Score với breakdown chi tiết.
-    
-    Returns:
-    - Trust score tổng
-    - Breakdown từng component (sentiment, spam, volume, verification)
-    - Contribution của mỗi component
-    """
-    # Verify product exists
+
     product = product_service.get(product_id)
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
@@ -89,25 +75,27 @@ def calculate_trust_score(
     product_id: UUID,
     trust_score_service: ProductTrustScoreService = Depends(get_product_trust_score_service),
     product_service: ProductService = Depends(get_product_service),
+    review_service: ProductReviewService = Depends(get_product_review_service),
+    analysis_service: ReviewAnalysisService = Depends(get_review_analysis_service),
     token: TokenData = Depends(verify_token),
 ):
-    """
-    Tính toán (hoặc tính lại) Trust Score cho một product.
-    
-    Yêu cầu product phải có reviews và reviews phải được phân tích trước.
-    
-    Formula:
-    - Sentiment Factor: 40%
-    - Spam Factor: 30%
-    - Volume Factor: 20%
-    - Verification Factor: 10%
-    """
-    # Verify product exists
+
     product = product_service.get(product_id)
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
     
     try:
+        # Auto-analyze unanalyzed reviews before calculating trust score
+        unanalyzed = review_service.get_unanalyzed_reviews(product_id=product_id, limit=1000)
+        
+        if unanalyzed:
+            # Analyze unanalyzed reviews
+            analyses = analysis_service.analyze_product_reviews(product_id)
+        
+        # Re-analyze reviews with fallback scores (0.5) - indicates model error
+        fallback_analyses = analysis_service.reanalyze_fallback_reviews(product_id)
+        
+        # Calculate trust score
         trust_score = trust_score_service.calculate_trust_score(product_id)
         if not trust_score:
             raise HTTPException(
@@ -129,7 +117,6 @@ def delete_trust_score(
     product_service: ProductService = Depends(get_product_service),
     token: TokenData = Depends(verify_token),
 ):
-    """Xóa Trust Score của một product (để tính lại từ đầu)"""
     product = product_service.get(product_id)
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
@@ -141,11 +128,6 @@ def delete_trust_score(
             detail="Trust score not found for this product"
         )
 
-
-# =============================================================================
-# TOP TRUSTED PRODUCTS
-# =============================================================================
-
 @router.get("/top-trusted", tags=["Trust Score"])
 def get_top_trusted_products(
     project_id: Optional[UUID] = Query(None, description="Filter by project"),
@@ -153,12 +135,7 @@ def get_top_trusted_products(
     trust_score_service: ProductTrustScoreService = Depends(get_product_trust_score_service),
     token: TokenData = Depends(verify_token),
 ):
-    """
-    Lấy danh sách products có Trust Score cao nhất.
-    
-    - **project_id**: Lọc theo project (optional)
-    - **limit**: Số lượng products trả về (max 50)
-    """
+
     top_products = trust_score_service.get_top_trusted(
         project_id=project_id,
         limit=limit
@@ -181,11 +158,6 @@ def get_products_by_score_range(
     trust_score_service: ProductTrustScoreService = Depends(get_product_trust_score_service),
     token: TokenData = Depends(verify_token),
 ):
-    """
-    Lấy danh sách products trong khoảng Trust Score.
-    
-    Ví dụ: Lấy products có score từ 80-100 (high trust)
-    """
     products = trust_score_service.get_by_score_range(
         min_score=min_score,
         max_score=max_score,

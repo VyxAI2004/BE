@@ -107,6 +107,35 @@ def get_analysis_statistics(
     }
 
 
+@router.get("/sentiment-scores")
+def get_sentiment_scores(
+    product_id: UUID,
+    analysis_service: ReviewAnalysisService = Depends(get_review_analysis_service),
+    product_service: ProductService = Depends(get_product_service),
+    token: TokenData = Depends(verify_token),
+):
+
+    product = product_service.get(product_id)
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    
+    return analysis_service.get_sentiment_scores_detail(product_id)
+
+
+@router.get("/spam-scores")
+def get_spam_scores(
+    product_id: UUID,
+    analysis_service: ReviewAnalysisService = Depends(get_review_analysis_service),
+    product_service: ProductService = Depends(get_product_service),
+    token: TokenData = Depends(verify_token),
+):
+    product = product_service.get(product_id)
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    
+    return analysis_service.get_spam_scores_detail(product_id)
+
+
 @router.get("/{analysis_id}", response_model=ReviewAnalysisResponse)
 def get_analysis_detail(
     product_id: UUID,
@@ -115,8 +144,6 @@ def get_analysis_detail(
     product_service: ProductService = Depends(get_product_service),
     token: TokenData = Depends(verify_token),
 ):
-    """Lấy chi tiết một analysis"""
-    # Verify product exists
     product = product_service.get(product_id)
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
@@ -137,18 +164,17 @@ def create_analysis(
     product_service: ProductService = Depends(get_product_service),
     token: TokenData = Depends(verify_token),
 ):
-    """
-    Tạo AI analysis cho một review.
-    
-    Nếu review đã có analysis, sẽ update thay vì tạo mới (upsert).
-    Thường được gọi từ AI service, không phải user trực tiếp.
-    """
-    # Verify product exists
     product = product_service.get(product_id)
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
     
-    # Verify review exists and belongs to product
+    review = review_service.get(payload.review_id)
+    if not review:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found")
+    product = product_service.get(product_id)
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    
     review = review_service.get(payload.review_id)
     if not review:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found")
@@ -170,12 +196,6 @@ def bulk_create_analyses(
     product_service: ProductService = Depends(get_product_service),
     token: TokenData = Depends(verify_token),
 ):
-    """
-    Tạo nhiều AI analyses cùng lúc (batch processing).
-    
-    Dùng cho việc phân tích hàng loạt reviews sau khi crawl.
-    """
-    # Verify product exists
     product = product_service.get(product_id)
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
@@ -202,8 +222,6 @@ def update_analysis(
     product_service: ProductService = Depends(get_product_service),
     token: TokenData = Depends(verify_token),
 ):
-    """Cập nhật một analysis"""
-    # Verify product exists
     product = product_service.get(product_id)
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
@@ -224,8 +242,6 @@ def delete_analysis(
     product_service: ProductService = Depends(get_product_service),
     token: TokenData = Depends(verify_token),
 ):
-    """Xóa một analysis"""
-    # Verify product exists
     product = product_service.get(product_id)
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")

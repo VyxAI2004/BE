@@ -49,6 +49,7 @@ class ProductUpdate(BaseModel):
     url: Optional[str] = None
     is_verified: Optional[bool] = None
     data_source: Optional[str] = None
+    trust_score: Optional[float] = None
 
 class ProductResponse(ProductBase):
     """Schema for product response"""
@@ -62,6 +63,7 @@ class ProductResponse(ProductBase):
     collected_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    trust_score: Optional[float] = None
 
     class Config:
         from_attributes = True
