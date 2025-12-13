@@ -1,34 +1,28 @@
 import requests
 import urllib.parse
-import logging
-from typing import List, Dict, Any
+from typing import List
+
 from services.features.product_intelligence.crawler.base_scraper import BaseScraper
 from schemas.product_crawler import CrawledProductItem, CrawledProductDetail, CrawledReview
 
-logger = logging.getLogger(__name__)
 
 class TikiScraper(BaseScraper):
     def __init__(self):
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
             "Referer": "https://tiki.vn/",
         }
 
     def crawl_search_results(self, search_url: str, max_products: int = 10) -> List[CrawledProductItem]:
-        """
-        Tiki Search API: https://tiki.vn/api/v2/products?q={query}&limit={limit}
-        """
-        # Extract query from URL or use as raw query
         query = search_url
         if "tiki.vn" in search_url:
             try:
                 parsed = urllib.parse.urlparse(search_url)
                 qs = urllib.parse.parse_qs(parsed.query)
                 query = qs.get('q', [''])[0]
-                # Fallback if URL is like tiki.vn/search?q=...
-            except:
+            except Exception:
                 pass
-        
+
         if not query:
             return []
 
@@ -39,12 +33,10 @@ class TikiScraper(BaseScraper):
             res = requests.get(api_url, headers=self.headers, timeout=10)
             data = res.json()
             products = data.get("data", [])
-            
+
             results = []
             for p in products:
-                # Tiki API returns standardized data
-                link = f"https://tiki.vn/{p.get('url_path')}" if p.get('url_path') else ""
-                
+                link = f"https://tiki.vn/{p.get('url_path')}" if p.get('url_path') else None
                 results.append(CrawledProductItem(
                     name=p.get("name"),
                     price=p.get("price"),
@@ -54,47 +46,74 @@ class TikiScraper(BaseScraper):
                     link=link,
                     platform="tiki"
                 ))
-            
             return results
-
-        except Exception as e:
-            logger.error(f"Tiki search error: {e}")
+        except Exception:
             return []
 
     def crawl_product_details(self, product_url: str, review_limit: int = 30) -> CrawledProductDetail:
-        """
-        Crawl detail Tiki. 
-        Tiki Product API: https://tiki.vn/api/v2/products/{product_id}
-        """
-        # Extract ID from URL (e.g., -p123456.html)
         try:
             product_id = ""
             if "-p" in product_url:
-                product_id = product_url.split("-p")[-1].split(".")[0]
-            
+                part = product_url.split("-p")[-1]
+                product_id = part.split(".")[0].split("?")[0]
+
             if not product_id:
-                logger.warning("Could not extract Tiki Product ID")
                 return CrawledProductDetail(link=product_url)
 
             api_url = f"https://tiki.vn/api/v2/products/{product_id}"
             res = requests.get(api_url, headers=self.headers, timeout=10)
-            data = res.json()
+            if res.status_code != 200:
+                return CrawledProductDetail(link=product_url)
 
-            # Get description
+            data = res.json()
             description = data.get("description", "")
-            
-            # Tiki reviews API is separate: https://tiki.vn/api/v2/reviews?product_id={id}
-            # Implementing basic detail return for now
-            
+
+            comments = []
+            page = 1
+            while len(comments) < review_limit:
+                reviews_api = f"https://tiki.vn/api/v2/reviews?product_id={product_id}&limit=20&page={page}"
+                rev_res = requests.get(reviews_api, headers=self.headers, timeout=10)
+                if rev_res.status_code != 200:
+                    break
+
+                rev_data = rev_res.json()
+                reviews_list = rev_data.get("data", [])
+                if not reviews_list:
+                    break
+
+                for r in reviews_list:
+                    if len(comments) >= review_limit:
+                        break
+
+                    images = []
+                    if r.get("images"):
+                        images = [img.get("full_path") for img in r.get("images") if img.get("full_path")]
+
+                    comments.append(CrawledReview(
+                        author=r.get("created_by", {}).get("full_name", "Anonymous"),
+                        rating=r.get("rating", 5),
+                        content=r.get("content", ""),
+                        time=str(r.get("created_at", "")),
+                        images=images,
+                        helpful_count=r.get("thank_count", 0),
+                        seller_respond=None
+                    ))
+                page += 1
+
+            detailed_rating = data.get("rating_average", 0)
+            if isinstance(detailed_rating, (int, float)):
+                detailed_rating = {
+                    "avg": detailed_rating,
+                    "count": data.get("review_count", 0)
+                }
+
             return CrawledProductDetail(
                 link=product_url,
                 category=data.get("categories", {}).get("name", ""),
                 description=description,
-                detailed_rating={}, # Tiki API structure needed here
+                detailed_rating=detailed_rating,
                 total_rating=data.get("review_count", 0),
-                comments=[] # Need to call review API separately
+                comments=comments
             )
-
-        except Exception as e:
-            logger.error(f"Tiki detail crawl error: {e}")
+        except Exception:
             return CrawledProductDetail(link=product_url)

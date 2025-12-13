@@ -21,15 +21,13 @@ class LazadaScraper(BaseScraper):
 
     def crawl_search_results(self, search_url: str, max_products: int = 10) -> List[CrawledProductItem]:
         query = None
-
         if "lazada.vn" in search_url:
             try:
                 parsed = urllib.parse.urlparse(search_url)
                 qs = urllib.parse.parse_qs(parsed.query)
-                extracted_query = qs.get("q", [""])[0]
+                extracted_query = qs.get('q', [''])[0]
                 if extracted_query:
                     query = urllib.parse.unquote(extracted_query)
-
                 if not query and "/tag/" in parsed.path:
                     tag_path = parsed.path.split("/tag/")[-1].rstrip("/")
                     if tag_path:
@@ -64,64 +62,52 @@ class LazadaScraper(BaseScraper):
                     options.add_argument("user-agent=Mozilla/5.0")
                     options.add_argument("--no-sandbox")
                     options.add_argument("--disable-dev-shm-usage")
-
                     driver = webdriver.Chrome(options=options)
 
                     driver.get(f"https://www.lazada.vn/catalog/?q={q}")
                     time.sleep(5)
 
-                    try:
-                        html_products = self._parse_html_products(driver.page_source, max_products)
-                        if html_products:
-                            driver.quit()
-                            return html_products
-                    except Exception:
-                        pass
+                    html_products = self._parse_html_products(driver.page_source, max_products)
+                    if html_products:
+                        driver.quit()
+                        return html_products
 
                     driver.get(api_url)
                     time.sleep(3)
 
                     content = None
+                    pre = driver.find_elements(By.TAG_NAME, "pre")
+                    if pre:
+                        content = pre[0].text
+                    else:
+                        content = driver.find_element(By.TAG_NAME, "body").text
+
                     try:
-                        pre = driver.find_elements(By.TAG_NAME, "pre")
-                        if pre:
-                            content = pre[0].text
+                        data = json.loads(content)
                     except Exception:
-                        pass
-
-                    if not content:
-                        try:
-                            content = driver.find_element(By.TAG_NAME, "body").text
-                        except Exception:
-                            pass
-
-                    if content:
-                        try:
-                            data = json.loads(content)
-                        except json.JSONDecodeError:
-                            html_products = self._parse_html_products(driver.page_source, max_products)
-                            if html_products:
-                                driver.quit()
-                                return html_products
-                            data = {}
+                        html_products = self._parse_html_products(driver.page_source, max_products)
+                        if html_products:
+                            driver.quit()
+                            return html_products
+                        data = {}
                 except Exception:
                     if driver:
-                        try:
-                            driver.quit()
-                        except Exception:
-                            pass
+                        driver.quit()
                     driver = None
 
             if not data:
                 try:
                     headers = self.headers.copy()
                     headers.pop("X-Requested-With", None)
-
                     res = requests.get(api_url, headers=headers, timeout=15)
                     try:
                         data = res.json()
-                    except json.JSONDecodeError:
+                    except Exception:
                         html_products = self._parse_html_products(res.text, max_products)
+                        if html_products:
+                            return html_products
+                        page_res = requests.get(f"https://www.lazada.vn/catalog/?q={q}", headers=headers, timeout=15)
+                        html_products = self._parse_html_products(page_res.text, max_products)
                         if html_products:
                             return html_products
                         return []
@@ -136,13 +122,11 @@ class LazadaScraper(BaseScraper):
             elif data.get("items"):
                 products = data["items"]
             elif isinstance(data.get("data"), list):
-                products = data["data"]
+                products = data.get("data")
 
             results: List[CrawledProductItem] = []
-
             for p in products[:max_products]:
                 link = p.get("productUrl") or p.get("itemUrl") or p.get("productUrlAlias")
-
                 if link:
                     if link.startswith("//"):
                         link = "https:" + link
@@ -173,51 +157,39 @@ class LazadaScraper(BaseScraper):
     def _parse_html_products(self, html_content: str, max_products: int = 10) -> List[CrawledProductItem]:
         try:
             from bs4 import BeautifulSoup
-        except ImportError:
+        except Exception:
             return []
 
-        soup = BeautifulSoup(html_content, "html.parser")
+        soup = BeautifulSoup(html_content, 'html.parser')
         products = []
+        items = soup.find_all('div', {'data-qa-locator': 'product-item'})
 
-        product_items = soup.find_all("div", {"data-qa-locator": "product-item"})
-        if not product_items:
-            product_items = soup.find_all("div", class_=lambda x: x and "Bm3ON" in x)
+        for item in items[:max_products]:
+            link = None
+            a = item.find('a', href=True)
+            if a:
+                link = a['href']
+                if link.startswith("//"):
+                    link = "https:" + link
+                elif link.startswith("/"):
+                    link = "https://www.lazada.vn" + link
 
-        for item in product_items[:max_products]:
-            try:
-                link_elem = item.find("a", href=True)
-                link = link_elem.get("href") if link_elem else None
+            name = a.get('title') if a else None
+            price_elem = item.find('span', class_=lambda x: x and 'ooOxS' in x)
+            price = price_elem.get_text(strip=True).replace('₫', '') if price_elem else None
+            img_elem = item.find('img', src=True)
+            img = img_elem['src'] if img_elem else None
 
-                if link:
-                    if link.startswith("//"):
-                        link = "https:" + link
-                    elif link.startswith("/"):
-                        link = "https://www.lazada.vn" + link
-
-                title_elem = item.find("a", title=True)
-                name = title_elem.get("title").strip() if title_elem else None
-
-                price_elem = item.find("span", class_=lambda x: x and "ooOxS" in x)
-                price = price_elem.get_text(strip=True) if price_elem else None
-
-                img_elem = item.find("img", src=True)
-                img = img_elem.get("src") if img_elem else None
-                if img and img.startswith("//"):
-                    img = "https:" + img
-
-                if name and link:
-                    products.append(CrawledProductItem(
-                        name=name,
-                        price=price,
-                        sold=None,
-                        rating=None,
-                        img=img,
-                        link=link,
-                        platform="lazada"
-                    ))
-            except Exception:
-                continue
-
+            if name and link:
+                products.append(CrawledProductItem(
+                    name=name,
+                    price=price,
+                    sold=None,
+                    rating=None,
+                    img=img,
+                    link=link,
+                    platform="lazada"
+                ))
         return products
 
     def _extract_item_id(self, url: str) -> Optional[str]:
@@ -232,3 +204,68 @@ class LazadaScraper(BaseScraper):
             if m:
                 return m.group(1)
         return None
+
+    def crawl_product_details(self, product_url: str, review_limit: int = 30) -> CrawledProductDetail:
+        item_id = self._extract_item_id(product_url)
+        all_reviews: List[CrawledReview] = []
+        driver = None
+
+        try:
+            from selenium import webdriver
+            selenium_available = True
+        except Exception:
+            selenium_available = False
+
+        try:
+            if selenium_available:
+                options = Options()
+                options.add_argument("--headless=new")
+                options.add_argument("--disable-blink-features=AutomationControlled")
+                options.add_argument("user-agent=Mozilla/5.0")
+                options.add_argument("--no-sandbox")
+                options.add_argument("--disable-dev-shm-usage")
+                driver = webdriver.Chrome(options=options)
+                driver.get(product_url)
+                time.sleep(5)
+
+                if not item_id:
+                    item_id = self._extract_item_id(driver.current_url)
+
+            if not item_id:
+                return CrawledProductDetail(link=product_url)
+
+            if driver:
+                from bs4 import BeautifulSoup
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(4)
+                soup = BeautifulSoup(driver.page_source, 'html.parser')
+                review_items = soup.find_all('div', class_=lambda x: x and 'item' in x)
+
+                for item in review_items:
+                    if len(all_reviews) >= review_limit:
+                        break
+                    content = item.get_text(strip=True)
+                    all_reviews.append(CrawledReview(
+                        author="Anonymous",
+                        rating=5,
+                        content=content,
+                        time="",
+                        images=[],
+                        seller_respond=None,
+                        helpful_count=0
+                    ))
+        finally:
+            if driver:
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+
+        return CrawledProductDetail(
+            link=product_url,
+            category="Unknown",
+            description="",
+            detailed_rating={},
+            total_rating=len(all_reviews),
+            comments=all_reviews
+        )

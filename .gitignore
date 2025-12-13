@@ -56,3 +56,6 @@ Thumbs.db
 
 # Test
 test
+
+# Cookies data (sensitive)
+data/cookies/
