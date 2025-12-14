@@ -14,6 +14,8 @@ from .product_crawler import router as product_crawler_router
 from .product_review import router as product_review_router
 from .review_analysis import router as review_analysis_router
 from .trust_score import router as trust_score_router
+# Auto Discovery Feature
+from .product_auto_discovery import router as product_auto_discovery_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -33,3 +35,5 @@ api_router.include_router(product_crawler_router)
 api_router.include_router(product_review_router)
 api_router.include_router(review_analysis_router)
 api_router.include_router(trust_score_router)
+# Auto Discovery Feature
+api_router.include_router(product_auto_discovery_router)

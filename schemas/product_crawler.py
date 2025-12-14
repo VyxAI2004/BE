@@ -28,6 +28,7 @@ class CrawledProductItem(BaseModel):
     sold: Optional[Any] = None # Can be str "1.2k" or int
     rating: Optional[float] = None
     platform: Optional[str] = None # Added for convenience
+    review_count: Optional[int] = None # Number of reviews
 
 class CrawledReview(BaseModel):
     author: str
@@ -45,3 +46,43 @@ class CrawledProductDetail(BaseModel):
     detailed_rating: Dict[str, Any] = {} # e.g. {"5_star": 100}
     total_rating: int = 0
     comments: List[CrawledReview] = []
+
+
+class CrawledProductItemExtended(BaseModel):
+    """Extended product data from crawler with all fields"""
+    
+    # Basic Info
+    platform: str  # tiki, lazada, shopee
+    product_name: str
+    product_url: str
+    
+    # Pricing
+    price_current: float
+    price_original: Optional[float] = None
+    discount_rate: Optional[float] = None
+    
+    # Ratings & Reviews
+    rating_score: Optional[float] = None  # 0-5
+    review_count: Optional[int] = None
+    sales_count: Optional[int] = None
+    
+    # Seller Info
+    is_mall: bool = False
+    is_verified_seller: bool = False
+    seller_location: Optional[str] = None
+    brand: Optional[str] = None
+    
+    # Trust & Quality
+    trust_badge_type: Optional[str] = None  # TikiNOW, Yêu thích, etc.
+    trust_score: Optional[float] = None  # 0-100
+    
+    # Keywords & Metadata
+    keywords_in_title: List[str] = []
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    
+    # Images
+    image_urls: List[str] = []
+    
+    # Additional metadata
+    metadata: Dict[str, Any] = {}

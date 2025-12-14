@@ -8,6 +8,8 @@ description: Kế hoạch triển khai Product Trust Score dựa trên phân tí
 Mở rộng hệ thống Product để tính toán **điểm tin cậy (Trust Score)** dựa trên phân tích cảm xúc và phát hiện spam trong reviews được crawl từ các sàn thương mại điện tử.
 
 ### Kiến trúc hệ thống
+
+#### Flow 1: Trust Score Calculation (Phase 1-9)
 ```
 LLM Search → Product filter → Product URLs → BeautifulSoup Crawler → Product + Reviews
                                                                                      ↓
@@ -22,6 +24,25 @@ LLM Search → Product filter → Product URLs → BeautifulSoup Crawler → Pro
                                                                         Trust Score Calculation
                                                                                      ↓
                                                                         Update Product Score
+```
+
+#### Flow 2: Automated Product Discovery & Import (Phase 10)
+```
+User Text Input → AI Intent Parser → Filter Criteria (JSON) → AI Validation
+                                                                     ↓
+                                                              Valid Criteria
+                                                                     ↓
+AI Discovery (LLM Search) → Search Links → Auto Crawl → Product List (Raw Data)
+                                                                     ↓
+                                                              AI Filtering Service
+                                                                     ↓
+                                                              Filtered Products
+                                                                     ↓
+                                                              Auto Import Service
+                                                                     ↓
+                                                              Products in Database
+                                                                     ↓
+                                                              (Optional) Trigger Trust Score Flow
 ```
 
 ---
@@ -913,6 +934,21 @@ async def test_full_trust_score_calculation_flow():
 - [ ] Crawler documentation
 - [ ] Trust score formula documentation
 
+### Auto Discovery (Phase 10)
+- [ ] Create FilterIntentParser service
+- [ ] Create FilterCriteriaValidator service
+- [ ] Create ProductFilterCriteria schema
+- [ ] Create CrawledProductItemExtended schema
+- [ ] Create ProductFilterService
+- [ ] Create AutoImportService
+- [ ] Create AutoDiscoveryService (orchestration)
+- [ ] Enhance crawlers to extract extended fields
+- [ ] Create API endpoint for auto discovery
+- [ ] Add error handling and logging
+- [ ] Add unit tests for intent parsing
+- [ ] Add unit tests for filtering logic
+- [ ] Add integration tests for complete flow
+
 ---
 
 ## 🚀 Deployment Considerations
@@ -970,6 +1006,872 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/0
 
 ---
 
+## 🤖 Phase 10: Automated Product Discovery & Import Flow
+
+### 10.1. Tổng quan Flow
+
+Flow tự động hóa hoàn toàn từ tìm kiếm ý tưởng đến nhập liệu sản phẩm:
+
+```
+User Text Input → AI Intent Parser → Filter Criteria (JSON) → AI Validation
+                                                                     ↓
+                                                              Valid Criteria
+                                                                     ↓
+AI Discovery (LLM Search) → Search Links → Auto Crawl → Product List (Raw Data)
+                                                                     ↓
+                                                              AI Filtering Service
+                                                                     ↓
+                                                              Filtered Products
+                                                                     ↓
+                                                              Auto Import Service
+                                                                     ↓
+                                                              Products in Database
+```
+
+**Các bước:**
+1. **AI Discovery**: Tìm kiếm từ khóa và ý tưởng sản phẩm (sử dụng `ProductAIAgent`)
+2. **Auto Crawl**: Tự động crawl danh sách sản phẩm từ các kết quả tìm kiếm
+3. **AI Filtering**: Lọc sản phẩm tốt nhất dựa trên tiêu chí người dùng
+4. **Auto Import**: Tự động tạo sản phẩm trong Database
+
+---
+
+### 10.2. AI Intent Parser & Filter Criteria Extraction
+
+**File:** `services/features/product_intelligence/ai/filter_intent_parser.py`
+
+```python
+from typing import Dict, Any, Optional
+from pydantic import BaseModel, Field, ValidationError
+from core.llm.base import BaseAgent
+
+class ProductFilterCriteria(BaseModel):
+    """Structured filter criteria extracted from user input"""
+    
+    # Rating filters
+    min_rating: Optional[float] = Field(None, ge=0, le=5, description="Minimum rating score")
+    max_rating: Optional[float] = Field(None, ge=0, le=5, description="Maximum rating score")
+    
+    # Review count filters
+    min_review_count: Optional[int] = Field(None, ge=0, description="Minimum number of reviews")
+    max_review_count: Optional[int] = Field(None, ge=0, description="Maximum number of reviews")
+    
+    # Price filters
+    min_price: Optional[float] = Field(None, ge=0, description="Minimum price in VND")
+    max_price: Optional[float] = Field(None, ge=0, description="Maximum price in VND")
+    
+    # Platform & Seller filters
+    platforms: Optional[list[str]] = Field(None, description="Filter by platforms: shopee, lazada, tiki")
+    is_mall: Optional[bool] = Field(None, description="Only mall sellers")
+    is_verified_seller: Optional[bool] = Field(None, description="Only verified sellers")
+    
+    # Keyword filters
+    required_keywords: Optional[list[str]] = Field(None, description="Keywords that must appear in product name")
+    excluded_keywords: Optional[list[str]] = Field(None, description="Keywords to exclude")
+    
+    # Sales & Trust filters
+    min_sales_count: Optional[int] = Field(None, ge=0, description="Minimum sales count")
+    min_trust_score: Optional[float] = Field(None, ge=0, le=100, description="Minimum trust score")
+    
+    # Trust badge filters
+    trust_badge_types: Optional[list[str]] = Field(None, description="Trust badge types: TikiNOW, Yêu thích, etc.")
+    
+    # Brand filters
+    required_brands: Optional[list[str]] = Field(None, description="Required brands")
+    excluded_brands: Optional[list[str]] = Field(None, description="Excluded brands")
+    
+    # Location filters
+    seller_locations: Optional[list[str]] = Field(None, description="Seller locations")
+
+class FilterIntentParser:
+    """Parse natural language user input into structured filter criteria"""
+    
+    def __init__(self, llm_agent: BaseAgent):
+        self.llm = llm_agent
+    
+    async def parse_user_intent(self, user_text: str) -> tuple[Optional[ProductFilterCriteria], Optional[str]]:
+        """
+        Parse user text input into filter criteria
+        
+        Returns:
+            (filter_criteria, error_message)
+            - If parsing successful: (ProductFilterCriteria, None)
+            - If parsing failed: (None, error_message)
+        """
+        
+        prompt = f"""
+Bạn là một AI chuyên phân tích yêu cầu lọc sản phẩm từ người dùng.
+
+Nhiệm vụ: Phân tích đoạn text sau và trích xuất các tiêu chí lọc sản phẩm thành JSON format.
+
+Input từ người dùng:
+"{user_text}"
+
+Hãy trích xuất các thông tin sau (nếu có):
+- min_rating: Điểm đánh giá tối thiểu (0-5)
+- max_rating: Điểm đánh giá tối đa (0-5)
+- min_review_count: Số lượng review tối thiểu
+- max_review_count: Số lượng review tối đa
+- min_price: Giá tối thiểu (VND)
+- max_price: Giá tối đa (VND)
+- platforms: Danh sách platform (shopee, lazada, tiki)
+- is_mall: Chỉ lấy sản phẩm từ mall (true/false)
+- is_verified_seller: Chỉ lấy từ seller đã xác thực (true/false)
+- required_keywords: Từ khóa bắt buộc có trong tên sản phẩm
+- excluded_keywords: Từ khóa cần loại trừ
+- min_sales_count: Số lượng bán tối thiểu
+- min_trust_score: Điểm tin cậy tối thiểu (0-100)
+- trust_badge_types: Loại trust badge (TikiNOW, Yêu thích, etc.)
+- required_brands: Thương hiệu bắt buộc
+- excluded_brands: Thương hiệu loại trừ
+- seller_locations: Vị trí người bán
+
+Lưu ý:
+- Chỉ trả về các trường có trong input, không tự thêm
+- Nếu không có thông tin, để null
+- Giá tiền: chuyển đổi sang VND (ví dụ: 500k = 500000)
+- Rating: chuyển đổi sang số thập phân (ví dụ: "4.5 trở lên" = min_rating: 4.5)
+
+Trả về JSON format:
+{{
+    "min_rating": null,
+    "max_rating": null,
+    "min_review_count": null,
+    "max_review_count": null,
+    "min_price": null,
+    "max_price": null,
+    "platforms": null,
+    "is_mall": null,
+    "is_verified_seller": null,
+    "required_keywords": null,
+    "excluded_keywords": null,
+    "min_sales_count": null,
+    "min_trust_score": null,
+    "trust_badge_types": null,
+    "required_brands": null,
+    "excluded_brands": null,
+    "seller_locations": null
+}}
+"""
+        
+        try:
+            response = self.llm.generate(prompt, response_schema=ProductFilterCriteria)
+            criteria = ProductFilterCriteria(**response.parsed)
+            
+            # Validate criteria makes sense
+            validation_error = self._validate_criteria(criteria)
+            if validation_error:
+                return None, validation_error
+            
+            return criteria, None
+            
+        except ValidationError as e:
+            return None, f"Invalid criteria format: {str(e)}"
+        except Exception as e:
+            return None, f"Failed to parse intent: {str(e)}"
+    
+    def _validate_criteria(self, criteria: ProductFilterCriteria) -> Optional[str]:
+        """Validate that criteria makes logical sense"""
+        
+        # Check rating range
+        if criteria.min_rating and criteria.max_rating:
+            if criteria.min_rating > criteria.max_rating:
+                return "min_rating cannot be greater than max_rating"
+        
+        # Check price range
+        if criteria.min_price and criteria.max_price:
+            if criteria.min_price > criteria.max_price:
+                return "min_price cannot be greater than max_price"
+        
+        # Check review count range
+        if criteria.min_review_count and criteria.max_review_count:
+            if criteria.min_review_count > criteria.max_review_count:
+                return "min_review_count cannot be greater than max_review_count"
+        
+        return None
+```
+
+**Example Usage:**
+```python
+# Input: "tôi muốn sản phẩm có rating 4.5 trở lên, review 100 trở lên, mall, keyword chính hãng, premium, max price 500000"
+
+# Output:
+{
+    "min_rating": 4.5,
+    "min_review_count": 100,
+    "is_mall": true,
+    "required_keywords": ["chính hãng", "premium"],
+    "max_price": 500000
+}
+```
+
+---
+
+### 10.3. AI Criteria Validator
+
+**File:** `services/features/product_intelligence/ai/filter_validator.py`
+
+```python
+from typing import Optional
+from core.llm.base import BaseAgent
+from .filter_intent_parser import ProductFilterCriteria
+
+class FilterCriteriaValidator:
+    """Validate extracted criteria using AI to ensure it matches user intent"""
+    
+    def __init__(self, llm_agent: BaseAgent):
+        self.llm = llm_agent
+    
+    async def validate_criteria(
+        self, 
+        user_text: str, 
+        criteria: ProductFilterCriteria
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Validate that extracted criteria matches user intent
+        
+        Returns:
+            (is_valid, error_message)
+        """
+        
+        prompt = f"""
+Bạn là một AI validator kiểm tra xem criteria đã được trích xuất có đúng với ý định của người dùng không.
+
+Input từ người dùng:
+"{user_text}"
+
+Criteria đã trích xuất:
+{criteria.model_dump_json(indent=2)}
+
+Nhiệm vụ: Kiểm tra xem criteria có phản ánh đúng yêu cầu của người dùng không.
+
+Trả về JSON:
+{{
+    "is_valid": true/false,
+    "reason": "Lý do nếu không hợp lệ"
+}}
+
+Nếu criteria không đúng hoặc thiếu thông tin quan trọng, trả về is_valid: false và giải thích lý do.
+"""
+        
+        try:
+            response = self.llm.generate(prompt)
+            result = json.loads(response.text)
+            
+            if not result.get("is_valid", False):
+                return False, result.get("reason", "AI không hiểu yêu cầu của bạn")
+            
+            return True, None
+            
+        except Exception as e:
+            # If validation fails, assume invalid
+            return False, f"Không thể xác thực yêu cầu: {str(e)}"
+```
+
+---
+
+### 10.4. Product Data Schema (Extended)
+
+**File:** `schemas/product_crawler.py` (Update)
+
+```python
+class CrawledProductItemExtended(BaseModel):
+    """Extended product data from crawler with all fields"""
+    
+    # Basic Info
+    platform: str  # tiki, lazada, shopee
+    product_name: str
+    product_url: str
+    
+    # Pricing
+    price_current: float
+    price_original: Optional[float] = None
+    discount_rate: Optional[float] = None
+    
+    # Ratings & Reviews
+    rating_score: Optional[float] = None  # 0-5
+    review_count: Optional[int] = None
+    sales_count: Optional[int] = None
+    
+    # Seller Info
+    is_mall: bool = False
+    is_verified_seller: bool = False
+    seller_location: Optional[str] = None
+    brand: Optional[str] = None
+    
+    # Trust & Quality
+    trust_badge_type: Optional[str] = None  # TikiNOW, Yêu thích, etc.
+    trust_score: Optional[float] = None  # 0-100
+    
+    # Keywords & Metadata
+    keywords_in_title: list[str] = []
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    
+    # Images
+    image_urls: list[str] = []
+    
+    # Additional metadata
+    metadata: dict[str, Any] = {}
+```
+
+---
+
+### 10.5. AI Product Filtering Service
+
+**File:** `services/features/product_intelligence/filtering/product_filter_service.py`
+
+```python
+from typing import List
+from schemas.product_crawler import CrawledProductItemExtended
+from .filter_intent_parser import ProductFilterCriteria
+
+class ProductFilterService:
+    """Filter products based on criteria"""
+    
+    def filter_products(
+        self,
+        products: List[CrawledProductItemExtended],
+        criteria: ProductFilterCriteria
+    ) -> List[CrawledProductItemExtended]:
+        """Filter products based on criteria"""
+        
+        filtered = []
+        
+        for product in products:
+            if self._matches_criteria(product, criteria):
+                filtered.append(product)
+        
+        return filtered
+    
+    def _matches_criteria(
+        self,
+        product: CrawledProductItemExtended,
+        criteria: ProductFilterCriteria
+    ) -> bool:
+        """Check if product matches all criteria"""
+        
+        # Rating filter
+        if criteria.min_rating and (not product.rating_score or product.rating_score < criteria.min_rating):
+            return False
+        if criteria.max_rating and (product.rating_score and product.rating_score > criteria.max_rating):
+            return False
+        
+        # Review count filter
+        if criteria.min_review_count and (not product.review_count or product.review_count < criteria.min_review_count):
+            return False
+        if criteria.max_review_count and (product.review_count and product.review_count > criteria.max_review_count):
+            return False
+        
+        # Price filter
+        if criteria.min_price and product.price_current < criteria.min_price:
+            return False
+        if criteria.max_price and product.price_current > criteria.max_price:
+            return False
+        
+        # Platform filter
+        if criteria.platforms and product.platform not in criteria.platforms:
+            return False
+        
+        # Mall filter
+        if criteria.is_mall is not None and product.is_mall != criteria.is_mall:
+            return False
+        
+        # Verified seller filter
+        if criteria.is_verified_seller is not None and product.is_verified_seller != criteria.is_verified_seller:
+            return False
+        
+        # Required keywords filter
+        if criteria.required_keywords:
+            product_name_lower = product.product_name.lower()
+            if not all(keyword.lower() in product_name_lower for keyword in criteria.required_keywords):
+                return False
+        
+        # Excluded keywords filter
+        if criteria.excluded_keywords:
+            product_name_lower = product.product_name.lower()
+            if any(keyword.lower() in product_name_lower for keyword in criteria.excluded_keywords):
+                return False
+        
+        # Sales count filter
+        if criteria.min_sales_count and (not product.sales_count or product.sales_count < criteria.min_sales_count):
+            return False
+        
+        # Trust score filter
+        if criteria.min_trust_score and (not product.trust_score or product.trust_score < criteria.min_trust_score):
+            return False
+        
+        # Trust badge filter
+        if criteria.trust_badge_types and product.trust_badge_type not in criteria.trust_badge_types:
+            return False
+        
+        # Required brands filter
+        if criteria.required_brands and (not product.brand or product.brand not in criteria.required_brands):
+            return False
+        
+        # Excluded brands filter
+        if criteria.excluded_brands and product.brand in criteria.excluded_brands:
+            return False
+        
+        # Seller location filter
+        if criteria.seller_locations and (not product.seller_location or product.seller_location not in criteria.seller_locations):
+            return False
+        
+        return True
+```
+
+---
+
+### 10.6. Auto Import Service
+
+**File:** `services/features/product_intelligence/import/auto_import_service.py`
+
+```python
+from uuid import UUID
+from typing import List
+from sqlalchemy.orm import Session
+
+from schemas.product_crawler import CrawledProductItemExtended
+from schemas.product import ProductCreate
+from services.core.product import ProductService
+from repositories.product import ProductRepository
+
+class AutoImportService:
+    """Automatically import filtered products to database"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+        self.product_service = ProductService(db)
+    
+    def import_products(
+        self,
+        products: List[CrawledProductItemExtended],
+        project_id: UUID,
+        user_id: UUID,
+        crawl_session_id: Optional[UUID] = None
+    ) -> List[UUID]:
+        """Import products to database"""
+        
+        imported_ids = []
+        
+        for product_data in products:
+            try:
+                # Convert crawled data to ProductCreate schema
+                product_create = ProductCreate(
+                    project_id=project_id,
+                    crawl_session_id=crawl_session_id,
+                    name=product_data.product_name,
+                    brand=product_data.brand,
+                    category=product_data.category,
+                    subcategory=product_data.subcategory,
+                    platform=product_data.platform,
+                    url=product_data.product_url,
+                    current_price=product_data.price_current,
+                    original_price=product_data.price_original,
+                    discount_rate=product_data.discount_rate,
+                    currency="VND",
+                    data_source="auto_crawl"
+                )
+                
+                # Create product
+                product = self.product_service.create_product(
+                    payload=product_create,
+                    user_id=user_id
+                )
+                
+                imported_ids.append(product.id)
+                
+            except Exception as e:
+                # Log error but continue with other products
+                logger.error(f"Failed to import product {product_data.product_url}: {str(e)}")
+                continue
+        
+        return imported_ids
+```
+
+---
+
+### 10.7. Orchestration Service - Complete Flow
+
+**File:** `services/features/product_intelligence/orchestration/auto_discovery_service.py`
+
+```python
+from uuid import UUID
+from typing import Optional, List, Dict, Any
+from sqlalchemy.orm import Session
+
+from services.features.product_intelligence.agents.product_agent import ProductAIAgent
+from services.features.product_intelligence.crawler.crawler_service import CrawlerService
+from services.features.product_intelligence.ai.filter_intent_parser import FilterIntentParser, ProductFilterCriteria
+from services.features.product_intelligence.ai.filter_validator import FilterCriteriaValidator
+from services.features.product_intelligence.filtering.product_filter_service import ProductFilterService
+from services.features.product_intelligence.import.auto_import_service import AutoImportService
+from core.llm.factory import AgentFactory
+
+class AutoDiscoveryService:
+    """Orchestrate complete automated product discovery and import flow"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+        self.product_agent = ProductAIAgent(db)
+        self.crawler_service = CrawlerService(db)
+        self.filter_service = ProductFilterService()
+        self.import_service = AutoImportService(db)
+        
+        # Initialize LLM for intent parsing
+        llm_agent = AgentFactory.create("google")  # or use project's assigned model
+        self.intent_parser = FilterIntentParser(llm_agent)
+        self.criteria_validator = FilterCriteriaValidator(llm_agent)
+    
+    async def execute_auto_discovery(
+        self,
+        project_id: UUID,
+        user_id: UUID,
+        user_query: str,
+        filter_criteria_text: Optional[str] = None,
+        max_products: int = 20
+    ) -> Dict[str, Any]:
+        """
+        Execute complete automated discovery flow
+        
+        Args:
+            project_id: Project to import products to
+            user_query: Product search query (e.g., "cà phê hòa tan")
+            filter_criteria_text: Natural language filter criteria (e.g., "rating 4.5+, review 100+, mall")
+            max_products: Maximum products to import
+        
+        Returns:
+            {
+                "status": "success" | "error",
+                "message": "...",
+                "filter_criteria": {...},
+                "products_found": 100,
+                "products_filtered": 15,
+                "products_imported": 15,
+                "imported_product_ids": [...]
+            }
+        """
+        
+        try:
+            # Step 1: Parse filter criteria from user text
+            filter_criteria = None
+            if filter_criteria_text:
+                criteria, error = await self.intent_parser.parse_user_intent(filter_criteria_text)
+                
+                if error:
+                    return {
+                        "status": "error",
+                        "message": f"Không thể phân tích tiêu chí lọc: {error}",
+                        "error_type": "intent_parsing_failed"
+                    }
+                
+                # Step 2: Validate criteria with AI
+                is_valid, validation_error = await self.criteria_validator.validate_criteria(
+                    filter_criteria_text,
+                    criteria
+                )
+                
+                if not is_valid:
+                    return {
+                        "status": "error",
+                        "message": validation_error or "AI không hiểu yêu cầu của bạn",
+                        "error_type": "criteria_validation_failed",
+                        "extracted_criteria": criteria.model_dump()
+                    }
+                
+                filter_criteria = criteria
+            
+            # Step 3: AI Discovery - Find product ideas and search links
+            project_info = {
+                "id": project_id,
+                "target_product_name": user_query,
+                "target_budget_range": filter_criteria.max_price if filter_criteria else None,
+                "description": user_query
+            }
+            
+            search_result = self.product_agent.search_products(
+                project_info=project_info,
+                user_id=user_id,
+                limit=max_products * 2,  # Get more to filter
+                platform="all"
+            )
+            
+            if not search_result.get("products") or not search_result["products"]:
+                return {
+                    "status": "error",
+                    "message": "Không tìm thấy sản phẩm nào từ AI search",
+                    "error_type": "no_products_found"
+                }
+            
+            # Step 4: Auto Crawl - Crawl products from search links
+            all_crawled_products = []
+            
+            for product_link in search_result.get("shopee_products", []):
+                try:
+                    # Determine platform from URL
+                    scraper = ScraperFactory.get_scraper(product_link)
+                    crawled_items = scraper.crawl_search_results(product_link, max_products=1)
+                    
+                    if crawled_items:
+                        # Convert to extended format
+                        for item in crawled_items:
+                            extended = self._convert_to_extended(item, product_link)
+                            all_crawled_products.append(extended)
+                
+                except Exception as e:
+                    logger.warning(f"Failed to crawl {product_link}: {str(e)}")
+                    continue
+            
+            # Step 5: AI Filtering - Filter products based on criteria
+            filtered_products = all_crawled_products
+            if filter_criteria:
+                filtered_products = self.filter_service.filter_products(
+                    all_crawled_products,
+                    filter_criteria
+                )
+            
+            # Limit to max_products
+            filtered_products = filtered_products[:max_products]
+            
+            # Step 6: Auto Import - Import filtered products to database
+            imported_ids = self.import_service.import_products(
+                products=filtered_products,
+                project_id=project_id,
+                user_id=user_id
+            )
+            
+            return {
+                "status": "success",
+                "message": f"Đã import {len(imported_ids)} sản phẩm thành công",
+                "filter_criteria": filter_criteria.model_dump() if filter_criteria else None,
+                "products_found": len(all_crawled_products),
+                "products_filtered": len(filtered_products),
+                "products_imported": len(imported_ids),
+                "imported_product_ids": imported_ids
+            }
+            
+        except Exception as e:
+            logger.error(f"Auto discovery failed: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"Lỗi trong quá trình tự động hóa: {str(e)}",
+                "error_type": "execution_error"
+            }
+    
+    def _convert_to_extended(
+        self,
+        item: CrawledProductItem,
+        source_url: str
+    ) -> CrawledProductItemExtended:
+        """Convert basic crawled item to extended format"""
+        
+        # Extract additional info from URL or item metadata
+        platform = item.platform or self._detect_platform(source_url)
+        
+        return CrawledProductItemExtended(
+            platform=platform,
+            product_name=item.name,
+            product_url=item.link or source_url,
+            price_current=float(item.price) if item.price else 0.0,
+            rating_score=item.rating,
+            review_count=None,  # May need to crawl detail page
+            sales_count=self._parse_sales_count(item.sold),
+            is_mall=False,  # Need to detect from detail page
+            brand=None,
+            keywords_in_title=self._extract_keywords(item.name),
+            image_urls=[item.img] if item.img else []
+        )
+    
+    def _detect_platform(self, url: str) -> str:
+        """Detect platform from URL"""
+        if "shopee" in url.lower():
+            return "shopee"
+        elif "lazada" in url.lower():
+            return "lazada"
+        elif "tiki" in url.lower():
+            return "tiki"
+        return "unknown"
+    
+    def _parse_sales_count(self, sold: Any) -> Optional[int]:
+        """Parse sales count from various formats"""
+        if sold is None:
+            return None
+        if isinstance(sold, int):
+            return sold
+        if isinstance(sold, str):
+            # Handle "1.2k" format
+            sold = sold.lower().replace(",", "")
+            if "k" in sold:
+                return int(float(sold.replace("k", "")) * 1000)
+            try:
+                return int(sold)
+            except:
+                return None
+        return None
+    
+    def _extract_keywords(self, text: str) -> List[str]:
+        """Extract keywords from product name"""
+        # Simple keyword extraction (can be enhanced with NLP)
+        words = text.lower().split()
+        # Filter out common words
+        stop_words = {"và", "của", "cho", "với", "từ", "đến", "có", "là", "một", "các"}
+        keywords = [w for w in words if len(w) > 2 and w not in stop_words]
+        return keywords[:10]  # Limit to 10 keywords
+```
+
+---
+
+### 10.8. API Endpoint
+
+**File:** `controllers/product_auto_discovery.py`
+
+```python
+from fastapi import APIRouter, Depends, HTTPException
+from uuid import UUID
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from core.dependencies.db import get_db
+from core.dependencies.auth import verify_token
+from schemas.auth import TokenData
+from services.features.product_intelligence.orchestration.auto_discovery_service import AutoDiscoveryService
+
+router = APIRouter(prefix="/products/auto-discovery", tags=["Auto Discovery"])
+
+class AutoDiscoveryRequest(BaseModel):
+    project_id: UUID
+    user_query: str = Field(..., description="Product search query")
+    filter_criteria: Optional[str] = Field(None, description="Natural language filter criteria")
+    max_products: int = Field(default=20, ge=1, le=100)
+
+@router.post("/execute")
+async def execute_auto_discovery(
+    request: AutoDiscoveryRequest,
+    db: Session = Depends(get_db),
+    token: TokenData = Depends(verify_token),
+):
+    """Execute automated product discovery and import flow"""
+    
+    service = AutoDiscoveryService(db)
+    result = await service.execute_auto_discovery(
+        project_id=request.project_id,
+        user_id=token.user_id,
+        user_query=request.user_query,
+        filter_criteria_text=request.filter_criteria,
+        max_products=request.max_products
+    )
+    
+    if result["status"] == "error":
+        raise HTTPException(
+            status_code=400,
+            detail=result["message"]
+        )
+    
+    return result
+```
+
+**Example Request:**
+```json
+{
+  "project_id": "uuid-here",
+  "user_query": "cà phê hòa tan",
+  "filter_criteria": "tôi muốn sản phẩm có rating 4.5 trở lên, review 100 trở lên, mall, keyword chính hãng, premium, max price 500000",
+  "max_products": 20
+}
+```
+
+**Example Response:**
+```json
+{
+  "status": "success",
+  "message": "Đã import 15 sản phẩm thành công",
+  "filter_criteria": {
+    "min_rating": 4.5,
+    "min_review_count": 100,
+    "is_mall": true,
+    "required_keywords": ["chính hãng", "premium"],
+    "max_price": 500000
+  },
+  "products_found": 100,
+  "products_filtered": 15,
+  "products_imported": 15,
+  "imported_product_ids": ["uuid1", "uuid2", ...]
+}
+```
+
+---
+
+### 10.9. Enhanced Crawler for Extended Data
+
+**File:** `services/features/product_intelligence/crawler/enhanced_product_crawler.py`
+
+```python
+from typing import List
+from schemas.product_crawler import CrawledProductItemExtended
+from .scraper_factory import ScraperFactory
+
+class EnhancedProductCrawler:
+    """Enhanced crawler that extracts all extended fields"""
+    
+    def crawl_product_extended(self, product_url: str) -> CrawledProductItemExtended:
+        """Crawl product with all extended fields"""
+        
+        scraper = ScraperFactory.get_scraper(product_url)
+        
+        # Crawl product detail page
+        detail = scraper.crawl_product_details(product_url, review_limit=0)
+        
+        # Extract platform
+        platform = self._detect_platform(product_url)
+        
+        # Build extended product data
+        # This requires parsing HTML/API responses to extract:
+        # - is_mall
+        # - brand
+        # - seller_location
+        # - trust_badge_type
+        # - review_count (if not in search results)
+        # etc.
+        
+        return CrawledProductItemExtended(
+            platform=platform,
+            product_name=detail.link,  # Need to extract from detail
+            product_url=product_url,
+            # ... extract all fields from detail page
+        )
+    
+    def _detect_platform(self, url: str) -> str:
+        """Detect platform from URL"""
+        if "shopee" in url.lower():
+            return "shopee"
+        elif "lazada" in url.lower():
+            return "lazada"
+        elif "tiki" in url.lower():
+            return "tiki"
+        return "unknown"
+```
+
+---
+
+### 10.10. Implementation Checklist
+
+- [ ] Create `FilterIntentParser` service
+- [ ] Create `FilterCriteriaValidator` service
+- [ ] Create `ProductFilterCriteria` schema
+- [ ] Create `CrawledProductItemExtended` schema
+- [ ] Create `ProductFilterService`
+- [ ] Create `AutoImportService`
+- [ ] Create `AutoDiscoveryService` (orchestration)
+- [ ] Enhance crawlers to extract extended fields (is_mall, brand, seller_location, etc.)
+- [ ] Create API endpoint `/products/auto-discovery/execute`
+- [ ] Add error handling and logging
+- [ ] Add unit tests for intent parsing
+- [ ] Add unit tests for filtering logic
+- [ ] Add integration tests for complete flow
+- [ ] Update documentation
+
+---
+
 ## 🎓 Next Steps
 
 1. **Review & Approve Plan** ✓
@@ -993,9 +1895,14 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/0
 8. **Phase 8-9: Jobs & Testing** (2-3 days)
    - Background jobs
    - Comprehensive testing
-9. **Deployment & Monitoring** (1-2 days)
+9. **Phase 10: Auto Discovery** (3-4 days)
+   - Implement intent parser
+   - Implement filtering service
+   - Implement auto import
+   - Test complete flow
+10. **Deployment & Monitoring** (1-2 days)
 
-**Total Estimated Time:** 2-3 weeks
+**Total Estimated Time:** 3-4 weeks
 
 ---
 

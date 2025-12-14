@@ -135,14 +135,24 @@ class LazadaScraper(BaseScraper):
                     elif not link.startswith("http"):
                         link = "https:" + link
 
+                # Extract review count separately if available
+                review_count = p.get("reviewCount") or p.get("review")
+                if review_count:
+                    try:
+                        review_count = int(review_count)
+                    except (ValueError, TypeError):
+                        review_count = None
+                sold_volume = p.get("sellVolume")
+                
                 results.append(CrawledProductItem(
                     name=p.get("name"),
                     price=p.get("price"),
-                    sold=p.get("sellVolume") or p.get("review") or p.get("reviewCount"),
+                    sold=sold_volume,  # Use sellVolume for sold count
                     rating=float(p.get("ratingScore")) if p.get("ratingScore") else None,
                     img=p.get("thumb"),
                     link=link,
-                    platform="lazada"
+                    platform="lazada",
+                    review_count=review_count  # Store review_count separately
                 ))
 
             return results
@@ -162,33 +172,99 @@ class LazadaScraper(BaseScraper):
 
         soup = BeautifulSoup(html_content, 'html.parser')
         products = []
+        # Try multiple selectors for product items
         items = soup.find_all('div', {'data-qa-locator': 'product-item'})
+        if not items:
+            # Fallback: find by class containing product-related classes
+            items = soup.find_all('div', class_=lambda x: x and ('qmXQo' in str(x) or 'product' in str(x).lower()))
 
         for item in items[:max_products]:
             link = None
             a = item.find('a', href=True)
             if a:
-                link = a['href']
-                if link.startswith("//"):
-                    link = "https:" + link
-                elif link.startswith("/"):
-                    link = "https://www.lazada.vn" + link
+                link = a.get('href')
+                if link:
+                    if link.startswith("//"):
+                        link = "https:" + link
+                    elif link.startswith("/"):
+                        link = "https://www.lazada.vn" + link
 
             name = a.get('title') if a else None
+            if not name:
+                # Try to get name from alt attribute of img
+                img_elem = item.find('img', alt=True)
+                if img_elem:
+                    name = img_elem.get('alt')
+            
             price_elem = item.find('span', class_=lambda x: x and 'ooOxS' in x)
-            price = price_elem.get_text(strip=True).replace('₫', '') if price_elem else None
+            if price_elem:
+                price_text = price_elem.get_text(strip=True)
+                # Remove currency symbols and spaces
+                price_text = price_text.replace('₫', '').replace('đ', '').replace('VND', '').replace('vnd', '').strip()
+                # Remove dots used as thousand separators (e.g., "129.690" -> "129690")
+                # But keep decimal point if it's a decimal number (e.g., "129.5" -> "129.5")
+                # Lazada prices are usually integers, so dots are likely thousand separators
+                if '.' in price_text:
+                    parts = price_text.split('.')
+                    # If last part has 3 digits, it's likely thousand separator
+                    if len(parts) > 1 and len(parts[-1]) == 3:
+                        price_text = ''.join(parts)  # Remove dots (thousand separator)
+                    # Otherwise, treat as decimal
+                # Remove commas (thousand separator)
+                price_text = price_text.replace(',', '').strip()
+                price = price_text
+            else:
+                price = None
+            
             img_elem = item.find('img', src=True)
             img = img_elem['src'] if img_elem else None
+            
+            # Extract review count from <span class="qzqFw">(3)</span>
+            review_count = None
+            review_elem = item.find('span', class_=lambda x: x and 'qzqFw' in x)
+            if review_elem:
+                review_text = review_elem.get_text(strip=True)
+                # Extract number from text like "(3)" or "3"
+                import re
+                match = re.search(r'\(?(\d+)\)?', review_text)
+                if match:
+                    try:
+                        review_count = int(match.group(1))
+                    except (ValueError, TypeError):
+                        pass
+            
+            # Extract sold count from <span>6 Đã bán</span>
+            sold = None
+            sold_elem = item.find('span', string=lambda x: x and 'Đã bán' in str(x))
+            if sold_elem:
+                sold_text = sold_elem.get_text(strip=True)
+                # Extract number from text like "6 Đã bán"
+                match = re.search(r'(\d+)', sold_text)
+                if match:
+                    try:
+                        sold = int(match.group(1))
+                    except (ValueError, TypeError):
+                        pass
+            
+            # Extract rating from stars (if available)
+            rating = None
+            rating_container = item.find('div', class_=lambda x: x and ('mdmmT' in str(x) or 'rating' in str(x).lower()))
+            if rating_container:
+                # Count filled stars
+                stars = rating_container.find_all('i', class_=lambda x: x and 'Dy1nx' in str(x))
+                if stars:
+                    rating = len(stars)  # Simple: count stars, could be improved
 
             if name and link:
                 products.append(CrawledProductItem(
                     name=name,
                     price=price,
-                    sold=None,
-                    rating=None,
+                    sold=sold,
+                    rating=float(rating) if rating else None,
                     img=img,
                     link=link,
-                    platform="lazada"
+                    platform="lazada",
+                    review_count=review_count
                 ))
         return products
 
