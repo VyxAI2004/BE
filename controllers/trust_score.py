@@ -13,16 +13,21 @@ from core.dependencies.services import (
     get_product_service,
     get_product_review_service,
     get_review_analysis_service,
+    get_product_analytics_service,
+    get_product_analytics_cache_service,
 )
 from schemas.auth import TokenData
 from schemas.trust_score import (
     ProductTrustScoreResponse,
     TrustScoreDetailResponse,
 )
+from schemas.product_analytics import ProductAnalyticsResponse
 from services.core.product_trust_score import ProductTrustScoreService
 from services.core.product import ProductService
 from services.core.product_review import ProductReviewService
 from services.core.review_analysis import ReviewAnalysisService
+from services.core.product_analytics import ProductAnalyticsService
+from services.core.product_analytics_service import ProductAnalyticsCacheService
 
 router = APIRouter(prefix="/products", tags=["Trust Score"])
 
@@ -174,3 +179,65 @@ def get_products_by_score_range(
         "skip": skip,
         "limit": limit
     }
+
+
+@router.get("/{product_id}/analytics", response_model=ProductAnalyticsResponse, tags=["Product Analytics"])
+def get_product_analytics(
+    product_id: UUID,
+    refresh: bool = Query(False, description="Force refresh analytics (bypass cache)"),
+    analytics_cache_service: ProductAnalyticsCacheService = Depends(get_product_analytics_cache_service),
+    product_service: ProductService = Depends(get_product_service),
+    token: TokenData = Depends(verify_token),
+):
+    """
+    Phân tích sản phẩm bằng LLM dựa trên reviews và trust score.
+    Yêu cầu trust score đã được tính toán trước.
+    
+    - Nếu đã có analytics trong cache, trả về từ cache (tránh tốn chi phí LLM)
+    - Nếu chưa có hoặc refresh=True, phân tích mới và lưu vào cache
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    product = product_service.get(product_id)
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    
+    try:
+        # Get project to get assigned_model_id
+        project_assigned_model_id = None
+        try:
+            project = getattr(product, 'project', None)
+            if project:
+                project_assigned_model_id = getattr(project, 'assigned_model_id', None)
+                logger.info(f"Project assigned_model_id: {project_assigned_model_id} for product {product_id}")
+        except Exception as e:
+            logger.warning(f"Could not load project relationship for product {product_id}: {e}")
+        
+        # Get user_id from token
+        user_id = token.user_id
+        
+        # Get from cache or analyze
+        analytics = analytics_cache_service.get_or_analyze(
+            product_id=product_id,
+            user_id=user_id,
+            project_assigned_model_id=project_assigned_model_id,
+            force_refresh=refresh
+        )
+        
+        logger.info(f"Analytics {'from cache' if analytics.get('from_cache') else 'generated'} for product {product_id}")
+        return ProductAnalyticsResponse(**analytics)
+    except ValueError as e:
+        logger.warning(f"Validation error for product {product_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error analyzing product {product_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error analyzing product: {str(e)}"
+        )

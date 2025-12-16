@@ -27,6 +27,7 @@ selenium = "^4.38.0"
 onnxruntime = "^1.23.2"
 transformers = "^4.57.3"
 undetected-chromedriver = "^3.5.5"
+setuptools = "^80.9.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

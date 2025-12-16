@@ -149,6 +149,16 @@ Trả về JSON format:
             return user_query, filter_criteria, max_products, None
             
         except Exception as e:
-            logger.error(f"Failed to parse natural language input: {str(e)}", exc_info=True)
-            return None, None, None, f"Failed to parse input: {str(e)}"
+            error_str = str(e)
+            logger.error(f"Failed to parse natural language input: {error_str}", exc_info=True)
+            
+            # Provide user-friendly error messages
+            if "503" in error_str or "unavailable" in error_str.lower() or "overloaded" in error_str.lower():
+                return None, None, None, "Model đang quá tải. Vui lòng thử lại sau vài giây."
+            elif "429" in error_str or "rate limit" in error_str.lower():
+                return None, None, None, "Đã vượt quá giới hạn yêu cầu. Vui lòng thử lại sau."
+            elif "timeout" in error_str.lower():
+                return None, None, None, "Yêu cầu quá thời gian chờ. Vui lòng thử lại."
+            else:
+                return None, None, None, f"Không thể phân tích yêu cầu: {error_str}"
 

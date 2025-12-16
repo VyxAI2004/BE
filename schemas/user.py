@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, List, Annotated
 from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field
@@ -11,6 +11,10 @@ class UserBase(BaseModel):
     full_name: Annotated[str, Field(min_length=2, max_length=100)]
     avatar_url: Optional[str] = None
     is_active: Optional[bool] = True
+    date_of_birth: Optional[date] = None
+    language: Optional[str] = "en"
+    bio: Optional[str] = None
+    urls: Optional[List[str]] = None
 
 class UserCreate(BaseModel):
     username: Annotated[str, Field(min_length=3, max_length=50)]
@@ -26,6 +30,10 @@ class UserUpdate(BaseModel):
     full_name: Optional[Annotated[str, Field(min_length=2, max_length=100)]] = None
     avatar_url: Optional[str] = None
     is_active: Optional[bool] = None
+    date_of_birth: Optional[date] = None
+    language: Optional[str] = None
+    bio: Optional[str] = None
+    urls: Optional[List[str]] = None
 
 class UserChangePassword(BaseModel):
     """Schema for changing password"""

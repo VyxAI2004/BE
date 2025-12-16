@@ -16,6 +16,11 @@ from .review_analysis import router as review_analysis_router
 from .trust_score import router as trust_score_router
 # Auto Discovery Feature
 from .product_auto_discovery import router as product_auto_discovery_router
+# AI Task Generation Feature
+from .ai_tasks import router as ai_tasks_router
+# Tasks Feature
+from .task import router as task_router
+from .dashboard import router as dashboard_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -37,3 +42,9 @@ api_router.include_router(review_analysis_router)
 api_router.include_router(trust_score_router)
 # Auto Discovery Feature
 api_router.include_router(product_auto_discovery_router)
+# AI Task Generation Feature
+api_router.include_router(ai_tasks_router)
+# Tasks Feature
+api_router.include_router(task_router)
+# Dashboard Feature
+api_router.include_router(dashboard_router)

@@ -139,8 +139,30 @@ class UserService(BaseService[User, UserCreate, UserUpdate, UserRepository]):
         payload_dict = payload.model_dump(exclude_unset=True)
         if payload_dict.get("password"):
             payload_dict["password_hash"] = hash_password(payload_dict.pop("password"))
+        
+        # Convert urls list to JSON format for storage
+        # SQLAlchemy JSON field can store list directly, but ensure it's a list
+        if "urls" in payload_dict:
+            if payload_dict["urls"] is None:
+                payload_dict["urls"] = None
+            elif isinstance(payload_dict["urls"], list):
+                # Keep as list - SQLAlchemy JSON will handle it
+                payload_dict["urls"] = payload_dict["urls"]
+            else:
+                payload_dict["urls"] = []
+        
         payload_update = UserUpdate(**payload_dict)
-        return self.update(db_obj=db_user, payload=payload_update)
+        updated_user = self.update(db_obj=db_user, payload=payload_update)
+        
+        # Convert urls from JSON to list for response
+        if updated_user and updated_user.urls:
+            if isinstance(updated_user.urls, dict):
+                # If stored as dict, convert to list
+                updated_user.urls = updated_user.urls.get('items', []) if 'items' in updated_user.urls else []
+            elif not isinstance(updated_user.urls, list):
+                updated_user.urls = []
+        
+        return updated_user
 
     def delete_user(self, user_id: uuid.UUID) -> None:
         self.delete(id=user_id)

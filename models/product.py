@@ -71,6 +71,9 @@ class Product(Base):
     trust_score_detail: Mapped[Optional["ProductTrustScore"]] = relationship(
         "ProductTrustScore", back_populates="product", uselist=False, cascade="all, delete-orphan", lazy="select"
     )
+    analytics: Mapped[Optional["ProductAnalytics"]] = relationship(
+        "ProductAnalytics", back_populates="product", uselist=False, cascade="all, delete-orphan", lazy="select"
+    )
 
 
 class PriceHistory(Base):
@@ -341,3 +344,44 @@ class ProductTrustScore(Base):
     
     # Relationships
     product: Mapped["Product"] = relationship("Product", back_populates="trust_score_detail", lazy="select")
+
+
+class ProductAnalytics(Base):
+    """
+    Model lưu kết quả phân tích LLM cho mỗi product.
+    Mỗi product có tối đa 1 analytics record (1-1 relationship).
+    """
+    __tablename__ = "product_analytics"
+    
+    # Foreign Key - 1:1 với Product
+    product_id: Mapped[str] = mapped_column(
+        PGUUID(as_uuid=True), 
+        ForeignKey("products.id", ondelete="CASCADE"), 
+        nullable=False,
+        unique=True,
+        index=True
+    )
+    
+    # Analytics Data (JSON từ LLM)
+    analysis_data: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, comment="Kết quả phân tích từ LLM"
+    )
+    
+    # Metadata
+    model_used: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="LLM model được sử dụng"
+    )
+    total_reviews_analyzed: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="Tổng số reviews đã phân tích"
+    )
+    sample_reviews_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="Số reviews mẫu được sử dụng"
+    )
+    
+    # Analysis timestamp
+    analyzed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default='now()', nullable=False
+    )
+    
+    # Relationships
+    product: Mapped["Product"] = relationship("Product", back_populates="analytics", lazy="select")

@@ -21,12 +21,9 @@ class PermissionFilters(TypedDict, total=False):
 class PermissionRepository(BaseRepository[Permission, PermissionCreate, PermissionUpdate]):
     """Repository for permission-related database operations"""
 
-    def __init__(self, db: Session):
+    def __init__(self, model: Type[Permission], db: Session):
+        # Always use Permission model regardless of what's passed
         super().__init__(Permission, db)
-
-    # ------------------------------
-    # Internal helper methods
-    # ------------------------------
 
     def _build_permission_query(self):
         """Base SELECT for Permission with Role and RolePermission."""
