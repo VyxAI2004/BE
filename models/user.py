@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, Optional
-from sqlalchemy import String, Boolean
+from datetime import date
+from sqlalchemy import String, Boolean, Date, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -25,6 +26,11 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(100), nullable=False)
     avatar_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_active: Mapped[Optional[bool]] = mapped_column(Boolean, server_default="true", nullable=True)
+    # Settings fields
+    date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    language: Mapped[Optional[str]] = mapped_column(String(10), nullable=True, default="en")
+    bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    urls: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # Store as JSON array of URLs
     
     # Relationships
     roles: Mapped[list["UserRole"]] = relationship(

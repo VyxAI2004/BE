@@ -40,6 +40,11 @@ def check_global_permissions(*required_permissions: GlobalPermissionEnum):
                 return await func(*args, **kwargs)
             
             # Check permissions từ database thông qua PermissionService
+            # Ensure db is a Session instance - if not, resolve it directly
+            if not hasattr(db, 'execute'):
+                # If db doesn't have execute method, it's not a Session - get it directly
+                db_gen = get_db()
+                db = next(db_gen)
             permission_service = PermissionService(db)
             
             # Optimize: Fetch all permissions once (1 query)
@@ -108,6 +113,11 @@ def check_project_permissions(project_id_param: str = "project_id", *required_pe
                 return await func(*args, **kwargs)
             
             # Check permissions từ database thông qua PermissionService
+            # Ensure db is a Session instance - if not, resolve it directly
+            if not hasattr(db, 'execute'):
+                # If db doesn't have execute method, it's not a Session - get it directly
+                db_gen = get_db()
+                db = next(db_gen)
             permission_service = PermissionService(db)
             
             # Optimize: Check implicit permission (Owner/Assignee) OR explicit permissions

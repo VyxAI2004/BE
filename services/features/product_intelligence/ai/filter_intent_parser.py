@@ -123,8 +123,18 @@ Trả về JSON format:
             logger.error(f"Validation error parsing criteria: {str(e)}")
             return None, f"Invalid criteria format: {str(e)}"
         except Exception as e:
-            logger.error(f"Failed to parse intent: {str(e)}", exc_info=True)
-            return None, f"Failed to parse intent: {str(e)}"
+            error_str = str(e)
+            logger.error(f"Failed to parse intent: {error_str}", exc_info=True)
+            
+            # Provide user-friendly error messages
+            if "503" in error_str or "unavailable" in error_str.lower() or "overloaded" in error_str.lower():
+                return None, "Model đang quá tải. Vui lòng thử lại sau vài giây."
+            elif "429" in error_str or "rate limit" in error_str.lower():
+                return None, "Đã vượt quá giới hạn yêu cầu. Vui lòng thử lại sau."
+            elif "timeout" in error_str.lower():
+                return None, "Yêu cầu quá thời gian chờ. Vui lòng thử lại."
+            else:
+                return None, f"Không thể phân tích yêu cầu: {error_str}"
     
     def _validate_criteria(self, criteria: ProductFilterCriteria) -> Optional[str]:
         """Validate that criteria makes logical sense"""

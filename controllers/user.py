@@ -18,6 +18,7 @@ from schemas.user import (
 from schemas.role import UserRoleCreate
 from services.core.user import UserService
 from repositories.user import UserFilters
+from models.user import User
 from middlewares.permissions import check_global_permissions
 from shared.enums import GlobalPermissionEnum, RoleEnum
 from core.settings import settings
@@ -36,6 +37,30 @@ def create_user(
         return user
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.get("/me", response_model=UserResponse)
+def get_my_profile(
+    user_from_token: TokenData = Depends(verify_token),
+    user_service: UserService = Depends(get_user_service),
+):
+    """Get current user's profile"""
+    user = user_service.get_user(user_id=user_from_token.user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
+
+@router.patch("/me", response_model=UserResponse)
+def update_my_profile(
+    *,
+    payload: UserUpdate,
+    user_from_token: TokenData = Depends(verify_token),
+    user_service: UserService = Depends(get_user_service),
+):
+    """Update current user's profile"""
+    user = user_service.update_user(user_id=user_from_token.user_id, payload=payload)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
 
 @router.get("/me/permissions", response_model=List[str])
 def get_my_permissions(

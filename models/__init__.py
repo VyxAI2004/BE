@@ -15,6 +15,7 @@ from .product import (
     ProductReview,
     ReviewAnalysis,
     ProductTrustScore,
+    ProductAnalytics,
 )
 from .attachment import Attachment
 from .comment import Comment
@@ -57,6 +58,7 @@ __all__ = [
     "ProductReview",
     "ReviewAnalysis",
     "ProductTrustScore",
+    "ProductAnalytics",
     
     # System
     "ActivityLog",

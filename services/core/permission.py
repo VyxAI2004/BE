@@ -12,8 +12,8 @@ from core.cache import get_cache
 
 class PermissionService(BaseService[Permission, PermissionCreate, PermissionUpdate, PermissionRepository]):
     def __init__(self, db: Session):
-        self.db = db
-        self.repository = PermissionRepository(db)
+        # Call super().__init__() to properly initialize BaseService
+        super().__init__(db, Permission, PermissionRepository)
         self.cache = get_cache()
         self.CACHE_TTL = 300  # 5 minutes
 

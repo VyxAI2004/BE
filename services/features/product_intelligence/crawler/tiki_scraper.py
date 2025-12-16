@@ -37,6 +37,15 @@ class TikiScraper(BaseScraper):
             results = []
             for p in products:
                 link = f"https://tiki.vn/{p.get('url_path')}" if p.get('url_path') else None
+                
+                # Extract review_count from Tiki API response
+                review_count = None
+                if p.get("review_count") is not None:
+                    try:
+                        review_count = int(p.get("review_count"))
+                    except (ValueError, TypeError):
+                        pass
+                
                 results.append(CrawledProductItem(
                     name=p.get("name"),
                     price=p.get("price"),
@@ -44,7 +53,8 @@ class TikiScraper(BaseScraper):
                     rating=p.get("rating_average"),
                     img=p.get("thumbnail_url"),
                     link=link,
-                    platform="tiki"
+                    platform="tiki",
+                    review_count=review_count
                 ))
             return results
         except Exception:

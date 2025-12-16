@@ -32,7 +32,7 @@ def get_role_service(db: Session = Depends(get_db)):
     return RoleService(db)
 
 def get_permission_service(db: Session = Depends(get_db)):
-    from services.core.role import PermissionService
+    from services.core.permission import PermissionService
     return PermissionService(db)
 
 def get_product_service(db: Session = Depends(get_db)):
@@ -54,3 +54,15 @@ def get_product_trust_score_service(db: Session = Depends(get_db)):
 def get_crawler_service(db: Session = Depends(get_db)):
     from services.features.product_intelligence.crawler.crawler_service import CrawlerService
     return CrawlerService(db)
+
+def get_product_analytics_service(db: Session = Depends(get_db)):
+    from services.core.product_analytics import ProductAnalyticsService
+    return ProductAnalyticsService(db)
+
+def get_product_analytics_cache_service(db: Session = Depends(get_db)):
+    from services.core.product_analytics_service import ProductAnalyticsCacheService
+    return ProductAnalyticsCacheService(db)
+
+def get_dashboard_service(db: Session = Depends(get_db)):
+    from services.core.dashboard import DashboardService
+    return DashboardService(db)
