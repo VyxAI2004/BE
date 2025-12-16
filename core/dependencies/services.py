@@ -62,3 +62,7 @@ def get_product_analytics_service(db: Session = Depends(get_db)):
 def get_product_analytics_cache_service(db: Session = Depends(get_db)):
     from services.core.product_analytics_service import ProductAnalyticsCacheService
     return ProductAnalyticsCacheService(db)
+
+def get_dashboard_service(db: Session = Depends(get_db)):
+    from services.core.dashboard import DashboardService
+    return DashboardService(db)

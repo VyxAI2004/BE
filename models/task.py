@@ -30,6 +30,7 @@ class Task(Base):
 
     pipeline_stage: Mapped[str] = mapped_column(String(50), nullable=False)
     stage_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    task_order: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment="Thứ tự ưu tiên của task (1-5)")
 
     task_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     status: Mapped[Optional[str]] = mapped_column(String(20), server_default="pending", nullable=True)
