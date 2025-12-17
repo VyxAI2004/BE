@@ -55,6 +55,6 @@ WORKDIR /app
 COPY --chown=poetry:poetry . /app/
 USER poetry
 
-EXPOSE 80
+EXPOSE ${PORT:-80}
 
-CMD uvicorn app:app --host 0.0.0.0 --port 80 --forwarded-allow-ips='*' --proxy-headers --workers 2
+CMD uvicorn app:app --host 0.0.0.0 --port ${PORT:-80} --forwarded-allow-ips='*' --proxy-headers
