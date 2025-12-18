@@ -32,6 +32,17 @@ class TaskGeneratorService:
         self.project_service = ProjectService(db)
         self.llm_selector = LLMProviderSelector(db)
 
+    def _get_spam_percentage(self, trust_score_detail) -> str:
+        """Helper method để lấy spam_percentage từ trust_score_detail breakdown"""
+        try:
+            if "spam" in trust_score_detail.breakdown:
+                spam_breakdown = trust_score_detail.breakdown["spam"]
+                spam_percentage = spam_breakdown.details.get("spam_percentage", 0.0)
+                return f"Tỷ lệ spam: {float(spam_percentage):.2f}%"
+            return "Tỷ lệ spam: Không có dữ liệu"
+        except (AttributeError, KeyError, TypeError):
+            return "Tỷ lệ spam: Không có dữ liệu"
+
     def generate_tasks_from_product_analytics(
         self,
         product_id: UUID,
@@ -90,7 +101,7 @@ class TaskGeneratorService:
                             "sentiment_overview": f"Có {trust_score_detail.total_reviews} reviews",
                             "key_positive_themes": [],
                             "key_negative_themes": [],
-                            "spam_concerns": f"Tỷ lệ spam: {float(trust_score_detail.spam_percentage):.2f}%",
+                            "spam_concerns": self._get_spam_percentage(trust_score_detail),
                         },
                         "recommendations": [],
                         "risk_assessment": {
