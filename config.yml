@@ -7,7 +7,7 @@ app:
   log_level: info
 
 database:
-  url: postgresql://postgres:postgres@db:5432/sale_smart_ai
+  url: postgresql://sale_smart_ai:IBI1CabBzeyNqkEmeUnOOLUQBXrjNq5z@192.168.50.4:5433/sale_smart_ai
 
 redis:
   url: redis://redis:6379/0
