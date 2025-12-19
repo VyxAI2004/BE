@@ -30,6 +30,9 @@ class Settings:
     REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
     REDIS_PASSWORD: Optional[str] = os.getenv("REDIS_PASSWORD", None)
     
+    # Gemini / Google AI
+    GEMINI_BASE_URL: Optional[str] = os.getenv("GEMINI_BASE_URL", None)
+    
     @classmethod
     def validate_admin_secret_key(cls, key: str) -> bool:
         """Validate admin secret key"""
