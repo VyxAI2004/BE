@@ -39,10 +39,12 @@ class GeminiAgent(BaseAgent):
             base_url = base_url.rstrip('/')
             http_options["base_url"] = base_url
             logger.info(f"GeminiAgent: Using custom base_url: {base_url}")
+            logger.info(f"GeminiAgent: Model: {model}, API key provided: {api_key is not None}")
             # Nếu server nội bộ yêu cầu version cụ thể, bạn có thể cần thêm:
             # http_options["api_version"] = "v1beta"
         else:
             logger.info("GeminiAgent: Using default Google API endpoint (https://generativelanguage.googleapis.com/)")
+            logger.info(f"GeminiAgent: Model: {model}, API key provided: {api_key is not None}")
         
         # Convert dict to HttpOptions if needed
         if http_options:
@@ -81,9 +83,21 @@ class GeminiAgent(BaseAgent):
         return self._model
 
     def _is_retryable_error(self, error: Exception) -> bool:
-        """Check if error is retryable (503, 429, or other transient errors)"""
+        """Check if error is retryable (503, 429, network errors, or other transient errors)"""
         error_str = str(error).lower()
         error_repr = repr(error).lower()
+        
+        # Check for network connectivity errors (retryable)
+        if "no route to host" in error_str or "no route to host" in error_repr:
+            return True
+        if "errno 113" in error_str or "errno 113" in error_repr:
+            return True
+        if "connection refused" in error_str or "connection refused" in error_repr:
+            return True
+        if "connection timeout" in error_str or "connection timeout" in error_repr:
+            return True
+        if "network" in error_str or "network" in error_repr:
+            return True
         
         # Check for 503 errors
         if "503" in error_str or "503" in error_repr:
@@ -114,7 +128,7 @@ class GeminiAgent(BaseAgent):
                 return True
         
         if hasattr(error, "code"):
-            if error.code in [503, 429, 500, 502, 504]:
+            if error.code in [113, 111, 110, 503, 429, 500, 502, 504]:  # 113=No route to host, 111=Connection refused
                 return True
         
         return False
@@ -163,12 +177,26 @@ class GeminiAgent(BaseAgent):
                 last_error = e
                 is_retryable = self._is_retryable_error(e)
                 
+                # Log detailed error information
+                error_msg = str(e)
+                logger.error(f"Gemini API error (attempt {attempt + 1}/{self.max_retries}): {error_msg}")
+                
+                # Check if it's a network connectivity error
+                if "no route to host" in error_msg.lower() or "errno 113" in error_msg.lower():
+                    logger.error(
+                        f"Network connectivity error: Cannot reach endpoint. "
+                        f"Please check:\n"
+                        f"1. Is the service running at {settings.GEMINI_BASE_URL or 'custom endpoint'}?\n"
+                        f"2. Is the IP address and port correct?\n"
+                        f"3. Is there a firewall blocking the connection?\n"
+                        f"4. Can you ping/access the endpoint from this machine?"
+                    )
+                
                 if is_retryable and attempt < self.max_retries - 1:
                     # Exponential backoff: delay = initial_delay * (2 ^ attempt)
                     delay = self.retry_delay * (2 ** attempt)
                     logger.warning(
-                        f"Gemini API error (attempt {attempt + 1}/{self.max_retries}): {str(e)}. "
-                        f"Retrying in {delay:.1f} seconds..."
+                        f"Retrying in {delay:.1f} seconds... (attempt {attempt + 1}/{self.max_retries})"
                     )
                     time.sleep(delay)
                     continue
@@ -176,10 +204,10 @@ class GeminiAgent(BaseAgent):
                     # Not retryable or last attempt
                     if is_retryable:
                         logger.error(
-                            f"Gemini API error after {self.max_retries} attempts: {str(e)}"
+                            f"Gemini API error after {self.max_retries} attempts: {error_msg}"
                         )
                     else:
-                        logger.error(f"Gemini API error (non-retryable): {str(e)}")
+                        logger.error(f"Gemini API error (non-retryable): {error_msg}")
                     raise
         
         # Should not reach here, but just in case
