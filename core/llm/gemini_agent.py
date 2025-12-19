@@ -43,9 +43,34 @@ class GeminiAgent(BaseAgent):
             base_url = base_url.rstrip('/')
             logger.info(f"GeminiAgent: Using custom base_url: {base_url}")
             try:
-                http_options = types.HttpOptions(base_url=base_url)
-                logger.info(f"GeminiAgent: Created HttpOptions with base_url={base_url}")
-                self.client = genai.Client(api_key=api_key, http_options=http_options) if api_key else genai.Client(http_options=http_options)
+                # For custom endpoints without API key, we need to handle it specially
+                # Google SDK may still send API key in request, so we need to work around this
+                skip_api_key = kwargs.get("skip_api_key_validation", False) or not api_key
+                
+                if skip_api_key and not api_key:
+                    logger.info("GeminiAgent: Custom endpoint detected without API key - using dummy key")
+                    # Create HttpOptions - SDK will still require api_key parameter
+                    # But custom endpoint should handle the request differently
+                    http_options = types.HttpOptions(
+                        base_url=base_url,
+                        # Note: SDK may still add API key to request, custom endpoint needs to ignore it
+                    )
+                    # Use a dummy key - the custom endpoint at base_url should ignore invalid API keys
+                    # or handle authentication through other means (headers, etc.)
+                    dummy_key = "dummy-key-for-custom-endpoint"
+                    logger.info(f"GeminiAgent: Using dummy API key for custom endpoint: {base_url}")
+                    self.client = genai.Client(api_key=dummy_key, http_options=http_options)
+                else:
+                    http_options = types.HttpOptions(base_url=base_url)
+                    logger.info(f"GeminiAgent: Created HttpOptions with base_url={base_url}")
+                    if api_key:
+                        logger.info("GeminiAgent: Initializing client with API key")
+                        self.client = genai.Client(api_key=api_key, http_options=http_options)
+                    else:
+                        # This shouldn't happen, but just in case
+                        dummy_key = "dummy-key-for-custom-endpoint"
+                        self.client = genai.Client(api_key=dummy_key, http_options=http_options)
+                
                 logger.info(f"GeminiAgent: Client initialized successfully with custom base_url")
             except Exception as e:
                 logger.error(f"GeminiAgent: Failed to initialize client with custom base_url: {str(e)}")
@@ -53,6 +78,8 @@ class GeminiAgent(BaseAgent):
                 self.client = genai.Client(api_key=api_key) if api_key else genai.Client()
         else:
             logger.info("GeminiAgent: Using default Google API endpoint (https://generativelanguage.googleapis.com/)")
+            if not api_key:
+                logger.warning("GeminiAgent: No API key provided for default Google endpoint - this may cause errors")
             self.client = genai.Client(api_key=api_key) if api_key else genai.Client()
 
     def model_name(self) -> str:
