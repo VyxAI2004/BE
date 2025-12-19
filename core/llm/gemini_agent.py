@@ -33,12 +33,16 @@ class GeminiAgent(BaseAgent):
         base_url = base_url_from_kwargs or settings.GEMINI_BASE_URL
         
         # Cấu hình http_options nếu có custom base url
+        # Lưu ý: Proxy hỗ trợ cả OpenAI (/v1) và Gemini (root /)
+        # Google GenAI SDK sẽ tự động thêm path như /v1beta/models/... vào base_url
         http_options = {}
         if base_url:
             # Ensure base_url doesn't have trailing slash (Google SDK may add it)
             base_url = base_url.rstrip('/')
             http_options["base_url"] = base_url
             logger.info(f"GeminiAgent: Using custom base_url: {base_url}")
+            logger.info(f"GeminiAgent: Note - Proxy supports Gemini at root path (/)")
+            logger.info(f"GeminiAgent: SDK will call endpoints like: {base_url}/v1beta/models/...")
             logger.info(f"GeminiAgent: Model: {model}, API key provided: {api_key is not None}")
             # Nếu server nội bộ yêu cầu version cụ thể, bạn có thể cần thêm:
             # http_options["api_version"] = "v1beta"
@@ -150,6 +154,11 @@ class GeminiAgent(BaseAgent):
         last_error = None
         for attempt in range(self.max_retries):
             try:
+                # Log the request details for debugging
+                if attempt == 0:  # Only log on first attempt
+                    base_url_info = settings.GEMINI_BASE_URL or "default Google endpoint"
+                    logger.debug(f"GeminiAgent: Calling generate_content - model: {self._model}, base_url: {base_url_info}")
+                
                 resp = self.client.models.generate_content(
                     model=self._model,
                     contents=prompt,
