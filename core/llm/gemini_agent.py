@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 from typing import Any, Optional
 
@@ -18,12 +19,22 @@ logger = logging.getLogger(__name__)
 
 class GeminiAgent(BaseAgent):
     def __init__(self, model: str = "gemini-2.5-flash", api_key: Optional[str] = None, **kwargs):
-        self.client = genai.Client(api_key=api_key) if api_key else genai.Client()
         self._model = model
         self.config = kwargs
         # Retry configuration
         self.max_retries = kwargs.get("max_retries", 3)
         self.retry_delay = kwargs.get("retry_delay", 2.0)  # Initial delay in seconds
+        
+        # Get base_url from kwargs (can be passed from ai_model.base_url)
+        # If not provided, check environment variables for default
+        base_url = kwargs.get("base_url") or os.getenv("GEMINI_BASE_URL") or os.getenv("GOOGLE_BASE_URL")
+        
+        # Initialize client with custom base_url if provided
+        if base_url:
+            http_options = types.HttpOptions(base_url=base_url)
+            self.client = genai.Client(api_key=api_key, http_options=http_options) if api_key else genai.Client(http_options=http_options)
+        else:
+            self.client = genai.Client(api_key=api_key) if api_key else genai.Client()
 
     def model_name(self) -> str:
         return self._model
