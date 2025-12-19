@@ -27,13 +27,32 @@ class GeminiAgent(BaseAgent):
         
         # Get base_url from kwargs (can be passed from ai_model.base_url)
         # If not provided, check environment variables for default
-        base_url = kwargs.get("base_url") or os.getenv("GEMINI_BASE_URL") or os.getenv("GOOGLE_BASE_URL")
+        base_url_from_kwargs = kwargs.get("base_url")
+        base_url_from_env_gemini = os.getenv("GEMINI_BASE_URL")
+        base_url_from_env_google = os.getenv("GOOGLE_BASE_URL")
+        
+        base_url = base_url_from_kwargs or base_url_from_env_gemini or base_url_from_env_google
+        
+        # Log detailed configuration for debugging
+        logger.info(f"GeminiAgent initialization - model: {model}, base_url from kwargs: {base_url_from_kwargs}, "
+                   f"GEMINI_BASE_URL: {base_url_from_env_gemini}, GOOGLE_BASE_URL: {base_url_from_env_google}")
         
         # Initialize client with custom base_url if provided
         if base_url:
-            http_options = types.HttpOptions(base_url=base_url)
-            self.client = genai.Client(api_key=api_key, http_options=http_options) if api_key else genai.Client(http_options=http_options)
+            # Ensure base_url doesn't have trailing slash (Google SDK may add it)
+            base_url = base_url.rstrip('/')
+            logger.info(f"GeminiAgent: Using custom base_url: {base_url}")
+            try:
+                http_options = types.HttpOptions(base_url=base_url)
+                logger.info(f"GeminiAgent: Created HttpOptions with base_url={base_url}")
+                self.client = genai.Client(api_key=api_key, http_options=http_options) if api_key else genai.Client(http_options=http_options)
+                logger.info(f"GeminiAgent: Client initialized successfully with custom base_url")
+            except Exception as e:
+                logger.error(f"GeminiAgent: Failed to initialize client with custom base_url: {str(e)}")
+                logger.warning("GeminiAgent: Falling back to default endpoint")
+                self.client = genai.Client(api_key=api_key) if api_key else genai.Client()
         else:
+            logger.info("GeminiAgent: Using default Google API endpoint (https://generativelanguage.googleapis.com/)")
             self.client = genai.Client(api_key=api_key) if api_key else genai.Client()
 
     def model_name(self) -> str:
