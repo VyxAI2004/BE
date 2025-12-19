@@ -1,6 +1,10 @@
 import logging
+import os
 from typing import Any, Optional
 from openai import OpenAI
+
+# Import settings để lấy GEMINI_BASE_URL (có thể dùng cho OpenAI proxy)
+from core.settings import settings
 
 from .base import BaseAgent
 from .types import LLMResponse
@@ -9,7 +13,19 @@ logger = logging.getLogger(__name__)
 
 class OpenAIAgent(BaseAgent):
     def __init__(self, model: str = "gpt-4.1", api_key: Optional[str] = None, **kwargs):
-        self.client = OpenAI(api_key=api_key)
+        # Get base_url from kwargs or settings
+        base_url_from_kwargs = kwargs.get("base_url")
+        base_url = base_url_from_kwargs or settings.GEMINI_BASE_URL
+        
+        # Initialize OpenAI client with custom base_url if provided
+        if base_url:
+            base_url = base_url.rstrip('/')
+            logger.info(f"OpenAIAgent: Using custom base_url: {base_url}")
+            self.client = OpenAI(api_key=api_key, base_url=base_url)
+        else:
+            logger.info("OpenAIAgent: Using default OpenAI API endpoint")
+            self.client = OpenAI(api_key=api_key)
+        
         self._model = model
         self.config = kwargs
 
