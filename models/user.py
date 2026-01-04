@@ -73,6 +73,13 @@ class User(Base):
     assigned_tasks: Mapped[list["Task"]] = relationship(
         "Task", 
         back_populates="assignee",
+        foreign_keys="[Task.assigned_to]",
+        lazy="select"
+    )
+    created_tasks: Mapped[list["Task"]] = relationship(
+        "Task", 
+        back_populates="creator",
+        foreign_keys="[Task.created_by]",
         lazy="select"
     )
     activity_logs: Mapped[list["ActivityLog"]] = relationship(

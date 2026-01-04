@@ -27,6 +27,8 @@ class ProductCreate(ProductBase):
     project_id: UUID
     product_source_id: Optional[UUID] = None
     crawl_session_id: Optional[UUID] = None
+    review_count: Optional[int] = None
+    images: Optional[Dict[str, Any]] = None
     # Allow minimal creation
     platform: Optional[Annotated[str, Field(max_length=50)]] = None
     current_price: Optional[float] = 0.0
@@ -50,6 +52,7 @@ class ProductUpdate(BaseModel):
     is_verified: Optional[bool] = None
     data_source: Optional[str] = None
     trust_score: Optional[float] = None
+    review_count: Optional[int] = None
 
 class ProductResponse(ProductBase):
     """Schema for product response"""

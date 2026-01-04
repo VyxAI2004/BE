@@ -49,6 +49,13 @@ class AutoImportService:
                     continue
                 
                 # Convert crawled data to ProductCreate schema
+                # Note: average_rating and review_count are stored in specifications.detailed_rating
+                # No need to extract separately - they stay in specifications for FE to use
+                # Images are stored as list in images field
+                images_dict = None
+                if hasattr(product_data, 'image_urls') and product_data.image_urls:
+                    images_dict = {"urls": product_data.image_urls}
+                
                 product_create = ProductCreate(
                     project_id=project_id,
                     crawl_session_id=crawl_session_id,
@@ -62,7 +69,8 @@ class AutoImportService:
                     original_price=product_data.price_original,
                     discount_rate=product_data.discount_rate,
                     currency="VND",
-                    data_source="auto_crawl"
+                    data_source="auto_crawl",
+                    images=images_dict
                 )
                 
                 # Create product

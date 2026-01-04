@@ -20,6 +20,7 @@ class TaskBase(BaseModel):
     status: Optional[str] = Field("pending", max_length=20, description="Trạng thái")
     priority: Optional[str] = Field("medium", max_length=20, description="Độ ưu tiên")
     assigned_to: Optional[UUID] = Field(None, description="User được assign")
+    created_by: Optional[UUID] = Field(None, description="User tạo task")
     assigned_model_id: Optional[UUID] = Field(None, description="AI model được assign")
     due_date: Optional[date] = Field(None, description="Ngày hết hạn")
     estimated_hours: Optional[Decimal] = Field(None, description="Số giờ ước tính")
@@ -30,6 +31,8 @@ class TaskBase(BaseModel):
 class TaskCreate(TaskBase):
     """Schema để tạo task mới"""
     project_id: UUID = Field(..., description="ID của project")
+    product_id: Optional[UUID] = Field(None, description="ID của product")
+    created_by: Optional[UUID] = Field(None, description="ID của user tạo task")
     crawl_session_id: Optional[UUID] = Field(None, description="ID của crawl session")
 
 
@@ -45,6 +48,7 @@ class TaskUpdate(BaseModel):
     priority: Optional[str] = Field(None, max_length=20)
     assigned_to: Optional[UUID] = None
     assigned_model_id: Optional[UUID] = None
+    product_id: Optional[UUID] = None
     due_date: Optional[date] = None
     estimated_hours: Optional[Decimal] = None
     actual_hours: Optional[Decimal] = None
@@ -56,6 +60,9 @@ class TaskResponse(TaskBase):
     """Response schema cho Task"""
     id: UUID
     project_id: UUID
+    product_id: Optional[UUID] = None
+    product_name: Optional[str] = None
+    created_by: Optional[UUID] = None
     crawl_session_id: Optional[UUID]
     completed_at: Optional[datetime]
     created_at: datetime

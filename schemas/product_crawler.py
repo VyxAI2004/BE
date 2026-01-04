@@ -10,7 +10,7 @@ class CrawlSearchRequest(BaseModel):
 
 class CrawlReviewsRequest(BaseModel):
     product_id: UUID
-    review_limit: int = Field(default=30, ge=0, le=100)
+    review_limit: int = Field(default=30, ge=0, le=999999)
 
 # Respone Schemas
 class CrawlProductReviewsResponse(BaseModel):

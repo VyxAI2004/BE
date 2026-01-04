@@ -7,6 +7,7 @@ from .base import Base
 
 if TYPE_CHECKING:
     from .project import Project
+    from .product import Product
     from .crawl_session import CrawlSession
     from .user import User
     from .ai_model import AIModel
@@ -21,6 +22,9 @@ class Task(Base):
     # Columns
     project_id: Mapped[str] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    product_id: Mapped[Optional[str]] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=True
     )
     crawl_session_id: Mapped[Optional[str]] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("crawl_sessions.id", ondelete="SET NULL"), nullable=True
@@ -39,6 +43,9 @@ class Task(Base):
     assigned_to: Mapped[Optional[str]] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    created_by: Mapped[Optional[str]] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     assigned_model_id: Mapped[Optional[str]] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("ai_models.id", ondelete="SET NULL"), nullable=True
     )
@@ -51,8 +58,20 @@ class Task(Base):
 
     # Relationships
     project: Mapped["Project"] = relationship("Project", back_populates="tasks", lazy="select")
+    product: Mapped[Optional["Product"]] = relationship("Product", lazy="select")
     crawl_session: Mapped[Optional["CrawlSession"]] = relationship("CrawlSession", back_populates="tasks", lazy="select")
-    assignee: Mapped[Optional["User"]] = relationship("User", back_populates="assigned_tasks", lazy="select")
+    assignee: Mapped[Optional["User"]] = relationship(
+        "User", 
+        back_populates="assigned_tasks", 
+        foreign_keys=[assigned_to],
+        lazy="select"
+    )
+    creator: Mapped[Optional["User"]] = relationship(
+        "User", 
+        back_populates="created_tasks", 
+        foreign_keys=[created_by],
+        lazy="select"
+    )
     assigned_model: Mapped[Optional["AIModel"]] = relationship("AIModel", back_populates="assigned_tasks", lazy="select")
 
     subtasks: Mapped[list["Subtask"]] = relationship(

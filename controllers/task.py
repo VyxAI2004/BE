@@ -26,26 +26,41 @@ def get_task_service(db: Session = Depends(get_db)) -> TaskService:
 @router.get("/", response_model=List[TaskResponse])
 def get_tasks(
     project_id: Optional[UUID] = Query(None, description="Filter by project"),
+    product_id: Optional[UUID] = Query(None, description="Filter by product"),
     assigned_to: Optional[UUID] = Query(None, description="Filter by assigned user"),
-    status: Optional[str] = Query(None, description="Filter by status"),
+    status_filter: Optional[str] = Query(None, description="Filter by status", alias="status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     task_service: TaskService = Depends(get_task_service),
     token: TokenData = Depends(verify_token),
 ):
-    """Get tasks với filters"""
+    """Get tasks with authorization - only tasks user can access"""
     try:
-        if project_id:
-            tasks = task_service.get_by_project(project_id=project_id, skip=skip, limit=limit)
-        elif assigned_to:
-            tasks = task_service.get_by_assigned_to(user_id=assigned_to, skip=skip, limit=limit)
-        elif status:
-            tasks = task_service.get_by_status(status=status, skip=skip, limit=limit)
-        else:
-            # Get all tasks for user's projects
-            tasks = task_service.get_multi(skip=skip, limit=limit)
+        # Get user's accessible tasks
+        user_id = token.user_id
         
-        return tasks
+        # Get all tasks user has access to (creator, assigned, or project member)
+        all_accessible_tasks = task_service.get_user_accessible_tasks(user_id=user_id)
+        
+        # Apply filters
+        filtered_tasks = all_accessible_tasks
+        
+        if project_id:
+            filtered_tasks = [t for t in filtered_tasks if t.project_id == project_id]
+        
+        if product_id:
+            filtered_tasks = [t for t in filtered_tasks if t.product_id == product_id]
+        
+        if assigned_to:
+            filtered_tasks = [t for t in filtered_tasks if t.assigned_to == assigned_to]
+        
+        if status_filter:
+            filtered_tasks = [t for t in filtered_tasks if t.status == status_filter]
+        
+        # Apply pagination
+        paginated_tasks = filtered_tasks[skip : skip + limit]
+        
+        return paginated_tasks
     except Exception as e:
         logger.error(f"Error getting tasks: {e}", exc_info=True)
         raise HTTPException(
@@ -60,13 +75,24 @@ def get_task(
     task_service: TaskService = Depends(get_task_service),
     token: TokenData = Depends(verify_token),
 ):
-    """Get task by ID"""
+    """Get task by ID - only if user has access"""
     task = task_service.get(task_id)
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found",
         )
+    
+    # Check authorization
+    user_id = token.user_id
+    can_access = task_service.can_user_access_task(user_id=user_id, task=task)
+    
+    if not can_access:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to access this task",
+        )
+    
     return task
 
 
@@ -76,8 +102,13 @@ def create_task(
     task_service: TaskService = Depends(get_task_service),
     token: TokenData = Depends(verify_token),
 ):
-    """Create a new task"""
+    """Create a new task - set creator to current user"""
     try:
+        # Set creator as current user
+        payload_dict = payload.model_dump()
+        payload_dict['created_by'] = token.user_id
+        payload = TaskCreate(**payload_dict)
+        
         return task_service.create(payload=payload)
     except Exception as e:
         logger.error(f"Error creating task: {e}", exc_info=True)
@@ -94,7 +125,7 @@ def update_task(
     task_service: TaskService = Depends(get_task_service),
     token: TokenData = Depends(verify_token),
 ):
-    """Update task - nếu đang uncheck completed, không cần validate thứ tự"""
+    """Update task - only if user is creator or assigned"""
     task = task_service.get(task_id)
     if not task:
         raise HTTPException(
@@ -102,11 +133,16 @@ def update_task(
             detail="Task not found",
         )
     
-    # Nếu đang uncheck (từ completed về in_progress), cho phép
-    # Nếu đang mark as completed, redirect đến complete endpoint
-    if payload.status == "completed" and task.status != "completed":
-        # Redirect logic sẽ được handle bởi frontend gọi complete endpoint
-        pass
+    # Check authorization - only creator or assigned user can update
+    user_id = token.user_id
+    is_creator = task.created_by == user_id
+    is_assigned = task.assigned_to == user_id
+    
+    if not (is_creator or is_assigned):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only creator or assigned user can update this task",
+        )
     
     try:
         return task_service.update(db_obj=task, payload=payload)
