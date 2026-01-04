@@ -20,6 +20,8 @@ from .product_auto_discovery import router as product_auto_discovery_router
 from .ai_tasks import router as ai_tasks_router
 # Tasks Feature
 from .task import router as task_router
+from .task_collaborator import router as task_collaborator_router
+from .product_member import router as product_member_router
 from .dashboard import router as dashboard_router
 
 api_router = APIRouter(prefix="/api/v1")
@@ -46,5 +48,7 @@ api_router.include_router(product_auto_discovery_router)
 api_router.include_router(ai_tasks_router)
 # Tasks Feature
 api_router.include_router(task_router)
+api_router.include_router(task_collaborator_router)
+api_router.include_router(product_member_router)
 # Dashboard Feature
 api_router.include_router(dashboard_router)

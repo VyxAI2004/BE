@@ -87,7 +87,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         return query.offset(skip).limit(limit).all()
 
     def create(self, *, obj_in: CreateSchemaType) -> ModelType:
-        db_obj = self.model(**obj_in.model_dump())
+        db_obj = self.model(**obj_in.model_dump(exclude_none=True))
 
         try:
             self.db.add(db_obj)

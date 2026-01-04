@@ -8,7 +8,6 @@ from .base import Base
 
 if TYPE_CHECKING:
     from .user import User
-    from .project import ProjectUser
 
 
 class Role(Base):
@@ -35,11 +34,6 @@ class Role(Base):
         back_populates="role", 
         cascade="all, delete-orphan",
         lazy="select"
-    )
-    project_users: Mapped[list["ProjectUser"]] = relationship(
-        "ProjectUser",
-        back_populates="role",
-        lazy="select",
     )
 
 

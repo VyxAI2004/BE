@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 from shared.enums import ProjectRoleEnum
 
@@ -17,9 +17,15 @@ class ProjectUserCreate(ProjectUserBase):
     """Schema for creating project user membership"""
     invited_by: Optional[UUID] = None
 
+class ProjectUserInviteRequest(BaseModel):
+    """Schema for inviting user by email"""
+    email: EmailStr
+    role: Optional[str] = "member"  # owner, admin, member, viewer
+
 class ProjectUserUpdate(BaseModel):
     """Schema for updating project user membership"""
     role_id: Optional[UUID] = None
+    role: Optional[str] = None
     permissions: Optional[dict] = None
     is_active: Optional[bool] = None
 
@@ -30,6 +36,39 @@ class ProjectUserResponse(ProjectUserBase):
     invited_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ProjectMemberResponse(BaseModel):
+    """Schema for project member info - for task assignment"""
+    id: UUID  # User ID, not ProjectUser ID
+    name: str
+    email: str
+    
+    class Config:
+        from_attributes = True
+
+class ProjectMemberDetailResponse(BaseModel):
+    """Schema for detailed project member info"""
+    id: UUID  # User ID
+    name: str
+    email: str
+    role: Optional[str] = None
+    status: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class ProjectUserInviteResponse(BaseModel):
+    """Schema for invite response"""
+    id: UUID
+    project_id: UUID
+    user_id: UUID
+    role: str
+    status: str
+    invited_at: datetime
+    is_active: bool
 
     class Config:
         from_attributes = True

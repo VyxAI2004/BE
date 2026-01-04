@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from .crawl_session import CrawlSession
     from .task import Task
     from .ai_model import AIModel
+    from .product_user import ProductUser
 
 
 class Product(Base):
@@ -73,6 +74,9 @@ class Product(Base):
     )
     analytics: Mapped[Optional["ProductAnalytics"]] = relationship(
         "ProductAnalytics", back_populates="product", uselist=False, cascade="all, delete-orphan", lazy="select"
+    )
+    product_users: Mapped[list["ProductUser"]] = relationship(
+        "ProductUser", back_populates="product", cascade="all, delete-orphan", lazy="select"
     )
 
 

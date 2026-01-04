@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from .activity_log import ActivityLog
     from .attachment import Attachment
     from .comment import Comment
+    from .product_user import ProductUser
+    from .task_user import TaskUser
 
 
 class User(Base):
@@ -80,6 +82,30 @@ class User(Base):
         "Task", 
         back_populates="creator",
         foreign_keys="[Task.created_by]",
+        lazy="select"
+    )
+    product_memberships: Mapped[list["ProductUser"]] = relationship(
+        "ProductUser",
+        back_populates="user",
+        foreign_keys="[ProductUser.user_id]",
+        lazy="select"
+    )
+    invited_product_memberships: Mapped[list["ProductUser"]] = relationship(
+        "ProductUser",
+        back_populates="inviter",
+        foreign_keys="[ProductUser.invited_by]",
+        lazy="select"
+    )
+    task_memberships: Mapped[list["TaskUser"]] = relationship(
+        "TaskUser",
+        back_populates="user",
+        foreign_keys="[TaskUser.user_id]",
+        lazy="select"
+    )
+    invited_task_memberships: Mapped[list["TaskUser"]] = relationship(
+        "TaskUser",
+        back_populates="inviter",
+        foreign_keys="[TaskUser.invited_by]",
         lazy="select"
     )
     activity_logs: Mapped[list["ActivityLog"]] = relationship(

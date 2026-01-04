@@ -11,6 +11,7 @@ from repositories.task import TaskRepository
 from schemas.task import TaskCreate, TaskUpdate
 
 from .base import BaseService
+from .task_user import TaskUserService
 
 
 class TaskService(BaseService[Task, TaskCreate, TaskUpdate, TaskRepository]):
@@ -18,6 +19,28 @@ class TaskService(BaseService[Task, TaskCreate, TaskUpdate, TaskRepository]):
 
     def __init__(self, db: Session):
         super().__init__(db, Task, TaskRepository)
+
+    def update(self, db_obj: Task, payload: TaskUpdate, **kwargs) -> Task:
+        """Override update to handle assigned_to_ids for multiple assignees"""
+        # Extract assigned_to_ids if provided
+        assigned_to_ids = payload.assigned_to_ids
+        current_user_id = kwargs.get("current_user_id")
+        
+        # If assigned_to_ids provided, use TaskUserService to manage assignees
+        if assigned_to_ids is not None and len(assigned_to_ids) > 0:
+            task_user_service = TaskUserService(self.db)
+            task_user_service.set_assignees(db_obj.id, assigned_to_ids, current_user_id)
+            
+            # Set assigned_to to first user for backward compatibility
+            payload.assigned_to = assigned_to_ids[0]
+        elif assigned_to_ids is not None and len(assigned_to_ids) == 0:
+            # Empty list means remove all assignees
+            task_user_service = TaskUserService(self.db)
+            task_user_service.repository.remove_all_from_task(db_obj.id)
+            payload.assigned_to = None
+        
+        # Call parent update with remaining fields
+        return super().update(db_obj=db_obj, payload=payload)
 
     def get_by_project(
         self, project_id: UUID, skip: int = 0, limit: int = 100
@@ -43,7 +66,7 @@ class TaskService(BaseService[Task, TaskCreate, TaskUpdate, TaskRepository]):
 
     def can_user_access_task(self, user_id: UUID, task: Task) -> bool:
         """Check nếu user có access tới task (creator, assigned, or project member)"""
-        from models.project import ProjectUser
+        from models.project_user import ProjectUser
         
         # Check if creator
         if task.created_by == user_id:

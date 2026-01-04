@@ -92,7 +92,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
 
     def get_all_user_projects(self, user_id: UUID) -> List[Project]:
         """Get all projects related to a user: creator, assignee, or member"""
-        from models.project import ProjectUser
+        from models.project_user import ProjectUser
 
         query = (
             self.db.query(Project)

@@ -1,7 +1,8 @@
 import uuid
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from models.project import ProjectUser
+from models.project_user import ProjectUser
+from models.user import User
 from repositories.project_user import ProjectUserRepository
 from schemas.project_user import ProjectUserCreate, ProjectUserUpdate, ProjectMemberAssignRequest
 from .base import BaseService
@@ -22,6 +23,47 @@ class ProjectUserService(BaseService[ProjectUser, ProjectUserCreate, ProjectUser
         """Check if user is a member of the project"""
         membership = self.repository.get_by_project_and_user(project_id, user_id)
         return membership is not None and (membership.is_active or False)
+
+    def invite_user_by_email(
+        self,
+        project_id: uuid.UUID,
+        email: str,
+        role: str = "member",
+        invited_by: uuid.UUID = None
+    ) -> ProjectUser:
+        """Invite a user to project by email"""
+        # Find user by email
+        user = self.db.query(User).filter(User.email == email).first()
+        if not user:
+            raise ValueError(f"User with email {email} not found")
+        
+        # Check if already a member
+        existing_membership = self.repository.get_by_project_and_user(project_id, user.id)
+        if existing_membership:
+            if existing_membership.is_active:
+                raise ValueError(f"User {email} is already a member of this project")
+            # Reactivate
+            existing_membership.is_active = True
+            existing_membership.role = role
+            existing_membership.status = "pending"
+            self.db.add(existing_membership)
+            self.db.commit()
+            self.db.refresh(existing_membership)
+            return existing_membership
+        
+        # Create ProjectUser manually
+        project_user = ProjectUser(
+            project_id=project_id,
+            user_id=user.id,
+            role=role,
+            status="pending",
+            invited_by=invited_by,
+            is_active=True
+        )
+        self.db.add(project_user)
+        self.db.commit()
+        self.db.refresh(project_user)
+        return project_user
 
     def assign_users_to_project(
         self, 

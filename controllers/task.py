@@ -105,7 +105,7 @@ def create_task(
     """Create a new task - set creator to current user"""
     try:
         # Set creator as current user
-        payload_dict = payload.model_dump()
+        payload_dict = payload.model_dump(exclude_none=True)
         payload_dict['created_by'] = token.user_id
         payload = TaskCreate(**payload_dict)
         
@@ -138,6 +138,7 @@ def update_task(
     is_creator = task.created_by == user_id
     is_assigned = task.assigned_to == user_id
     
+    # Creator can always update, or assigned user can update
     if not (is_creator or is_assigned):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -145,7 +146,7 @@ def update_task(
         )
     
     try:
-        return task_service.update(db_obj=task, payload=payload)
+        return task_service.update(db_obj=task, payload=payload, current_user_id=user_id)
     except Exception as e:
         logger.error(f"Error updating task: {e}", exc_info=True)
         raise HTTPException(

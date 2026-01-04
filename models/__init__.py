@@ -2,7 +2,8 @@ from .base import Base
 from .user import User
 from .role import Role, Permission, UserRole, RolePermission
 from .ai_model import AIModel
-from .project import Project, ProjectUser
+from .project import Project
+from .project_user import ProjectUser
 from .product_source import ProductSource
 from .crawl_session import CrawlSession
 from .task import Task, Subtask

@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING, Optional
-from sqlalchemy import String, Text, Boolean, DateTime, Date, Numeric, ForeignKey
+from sqlalchemy import String, Text, Boolean, DateTime, Date, Numeric, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from .product import Product, PriceAnalysis, ProductComparison
     from .attachment import Attachment
     from .comment import Comment
+    from .project_user import ProjectUser
 
 
 class Project(Base):
@@ -109,43 +110,5 @@ class Project(Base):
         "Comment", 
         back_populates="project", 
         cascade="all, delete-orphan",
-        lazy="select"
-    )
-
-
-class ProjectUser(Base):
-    """Model cho bảng project_users - phân quyền trong project"""
-    __tablename__ = "project_users"
-    
-    # Columns
-    project_id: Mapped[str] = mapped_column(PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    user_id: Mapped[str] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    role_id: Mapped[Optional[str]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("roles.id", ondelete="SET NULL"), nullable=True)
-    permissions: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
-    joined_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), server_default='now()', nullable=True)
-    invited_by: Mapped[Optional[str]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, server_default='true', nullable=True)
-    
-    # Relationships
-    project: Mapped["Project"] = relationship(
-        "Project", 
-        back_populates="members",
-        lazy="select"
-    )
-    user: Mapped["User"] = relationship(
-        "User",
-        back_populates="project_memberships",
-        foreign_keys=[user_id],  
-        lazy="select"
-    )
-    role: Mapped[Optional["Role"]] = relationship(
-        "Role", 
-        back_populates="project_users",
-        lazy="select"
-    )
-    inviter: Mapped[Optional["User"]] = relationship(
-        "User",
-        back_populates="invited_project_memberships",
-        foreign_keys=[invited_by],
         lazy="select"
     )

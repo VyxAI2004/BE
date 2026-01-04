@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
-from models.project import ProjectUser
+from models.project_user import ProjectUser
 from schemas.project_user import ProjectUserCreate, ProjectUserUpdate
 
 from .base import BaseRepository

@@ -5,7 +5,8 @@ from sqlalchemy import select, and_, or_, func
 
 from repositories.base import BaseRepository
 from models.role import Permission, RolePermission, Role, UserRole
-from models.project import ProjectUser, Project
+from models.project import Project
+from models.project_user import ProjectUser
 from schemas.role import PermissionCreate, PermissionUpdate
 
 
@@ -140,13 +141,26 @@ class PermissionRepository(BaseRepository[Permission, PermissionCreate, Permissi
 
     def is_project_owner_or_assignee(self, user_id: UUID, project_id: UUID) -> bool:
         """
-        Check if user is the creator or assignee of the project.
+        Check if user is the creator, assignee, or owner member of the project.
         """
+        from models.project_user import ProjectUser
+        
+        # Check 1: User is creator or assignee on Project table
         stmt = select(Project.id).where(
             Project.id == project_id,
             (Project.created_by == user_id) | (Project.assigned_to == user_id)
         )
-        return self.db.execute(stmt).first() is not None
+        if self.db.execute(stmt).first() is not None:
+            return True
+        
+        # Check 2: User is a member with 'owner' role
+        member_stmt = select(ProjectUser.id).where(
+            ProjectUser.project_id == project_id,
+            ProjectUser.user_id == user_id,
+            ProjectUser.role == 'owner',
+            ProjectUser.is_active == True
+        )
+        return self.db.execute(member_stmt).first() is not None
 
     def search(
         self,

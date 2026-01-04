@@ -46,7 +46,8 @@ class TaskUpdate(BaseModel):
     task_type: Optional[str] = Field(None, max_length=50)
     status: Optional[str] = Field(None, max_length=20)
     priority: Optional[str] = Field(None, max_length=20)
-    assigned_to: Optional[UUID] = None
+    assigned_to: Optional[UUID] = None  # Keep for backward compat
+    assigned_to_ids: Optional[list[UUID]] = Field(None, description="List of assigned user IDs")
     assigned_model_id: Optional[UUID] = None
     product_id: Optional[UUID] = None
     due_date: Optional[date] = None

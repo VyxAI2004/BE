@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from .ai_model import AIModel
     from .attachment import Attachment
     from .comment import Comment
+    from .task_user import TaskUser
 
 
 class Task(Base):
@@ -82,6 +83,28 @@ class Task(Base):
     )
     comments: Mapped[list["Comment"]] = relationship(
         "Comment", back_populates="task", cascade="all, delete-orphan", lazy="select"
+    )
+    task_users: Mapped[list["TaskUser"]] = relationship(
+        "TaskUser", back_populates="task", cascade="all, delete-orphan", lazy="select"
+    )
+    
+    @property
+    def product_name(self) -> Optional[str]:
+        """Get product name from relationship"""
+        return self.product.name if self.product else None
+    assigned_model: Mapped[Optional["AIModel"]] = relationship("AIModel", back_populates="assigned_tasks", lazy="select")
+
+    subtasks: Mapped[list["Subtask"]] = relationship(
+        "Subtask", back_populates="task", cascade="all, delete-orphan", lazy="select"
+    )
+    attachments: Mapped[list["Attachment"]] = relationship(
+        "Attachment", back_populates="task", cascade="all, delete-orphan", lazy="select"
+    )
+    comments: Mapped[list["Comment"]] = relationship(
+        "Comment", back_populates="task", cascade="all, delete-orphan", lazy="select"
+    )
+    task_users: Mapped[list["TaskUser"]] = relationship(
+        "TaskUser", back_populates="task", cascade="all, delete-orphan", lazy="select"
     )
 
 

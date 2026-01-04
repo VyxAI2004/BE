@@ -241,6 +241,7 @@ class TaskGeneratorService:
             try:
                 task_create = TaskCreate(
                     project_id=product.project_id,
+                    product_id=product_id,  # Set product_id so product_name will populate
                     name=task_data["name"],
                     description=task_data.get("description", ""),
                     pipeline_stage="research",
@@ -250,6 +251,7 @@ class TaskGeneratorService:
                     status="pending",
                     priority=task_data.get("priority", "medium"),
                     assigned_to=user_id,
+                    created_by=user_id,  # Set creator to the project owner/user
                     estimated_hours=Decimal(str(task_data.get("estimated_hours", 0))) if task_data.get("estimated_hours") else None,
                     stage_metadata={
                         "source": "ai_generated",

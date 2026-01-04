@@ -2,6 +2,7 @@ import uuid
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from models.project import Project
+from models.project_user import ProjectUser
 from repositories.project import ProjectFilters, ProjectRepository
 from schemas.project import ProjectCreate, ProjectUpdate
 from schemas.project_user import ProjectMemberAssignRequest
@@ -12,6 +13,25 @@ from .permission import PermissionService
 class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectRepository]):
     def __init__(self, db: Session):
         super().__init__(db, Project, ProjectRepository)
+
+    def create(self, *, payload: ProjectCreate) -> Project:
+        """Create a new project and automatically add the creator as a member with 'owner' role"""
+        # Create the project
+        project = self.repository.create(obj_in=payload)
+        
+        # Add the creator as a project member with 'owner' role
+        if payload.created_by:
+            project_user = ProjectUser(
+                project_id=project.id,
+                user_id=payload.created_by,
+                role='owner',
+                status='active',
+                is_active=True
+            )
+            self.db.add(project_user)
+            self.db.commit()
+        
+        return project
 
     def update_project(self, project_id: uuid.UUID, payload: ProjectUpdate, user_id: uuid.UUID) -> Optional[Project]:
         """Update project"""
@@ -157,3 +177,26 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectR
             update_payload = ProjectUpdate(status=status)
         
         return self.update(db_obj=db_project, payload=update_payload)
+
+    def invite_user_by_email(
+        self, 
+        project_id: uuid.UUID, 
+        email: str, 
+        role: str = "member",
+        invited_by: uuid.UUID = None
+    ):
+        """Invite a user to project by email"""
+        from .project_user import ProjectUserService
+        
+        db_project = self.get(project_id)
+        if not db_project:
+            raise ValueError("Project not found")
+        
+        # Use ProjectUserService to invite user
+        project_user_service = ProjectUserService(self.db)
+        return project_user_service.invite_user_by_email(
+            project_id=project_id,
+            email=email,
+            role=role,
+            invited_by=invited_by
+        )
