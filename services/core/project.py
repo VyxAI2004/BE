@@ -1,8 +1,9 @@
 import uuid
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 from models.project import Project
 from models.project_user import ProjectUser
+from models.team_user import TeamUser
 from repositories.project import ProjectFilters, ProjectRepository
 from schemas.project import ProjectCreate, ProjectUpdate
 from schemas.project_user import ProjectMemberAssignRequest
@@ -29,9 +30,37 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectR
                 is_active=True
             )
             self.db.add(project_user)
-            self.db.commit()
         
+        # If public visibility and has team, auto-add all active team members
+        if project.visibility == 'public' and project.team_id:
+            self._auto_join_team_members(project.id, project.team_id)
+        
+        self.db.commit()
         return project
+
+    def _auto_join_team_members(self, project_id: uuid.UUID, team_id: uuid.UUID) -> None:
+        """Auto-join all active team members to public project"""
+        team_members = self.db.query(TeamUser).filter(
+            TeamUser.team_id == team_id,
+            TeamUser.is_active == True
+        ).all()
+        
+        for team_member in team_members:
+            # Skip if already member
+            existing = self.db.query(ProjectUser).filter(
+                ProjectUser.project_id == project_id,
+                ProjectUser.user_id == team_member.user_id
+            ).first()
+            
+            if not existing:
+                project_user = ProjectUser(
+                    project_id=project_id,
+                    user_id=team_member.user_id,
+                    role='member',  # Team members join as members
+                    status='active',
+                    is_active=True
+                )
+                self.db.add(project_user)
 
     def update_project(self, project_id: uuid.UUID, payload: ProjectUpdate, user_id: uuid.UUID) -> Optional[Project]:
         """Update project"""

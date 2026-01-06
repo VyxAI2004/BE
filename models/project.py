@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from .attachment import Attachment
     from .comment import Comment
     from .project_user import ProjectUser
+    from .team import Team
 
 
 class Project(Base):
@@ -24,6 +25,9 @@ class Project(Base):
     __tablename__ = "projects"
     
     # Columns
+    team_id: Mapped[Optional[str]] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     target_product_name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -34,6 +38,7 @@ class Project(Base):
     pipeline_type: Mapped[Optional[str]] = mapped_column(String(50), server_default='standard', nullable=True)
     crawl_schedule: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # daily, weekly, monthly, custom
     next_crawl_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    visibility: Mapped[str] = mapped_column(String(20), server_default='public', nullable=False)  # public, restricted
     created_by: Mapped[Optional[str]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     assigned_to: Mapped[Optional[str]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     assigned_model_id: Mapped[Optional[str]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ai_models.id", ondelete="SET NULL"), nullable=True)
@@ -41,6 +46,11 @@ class Project(Base):
     completed_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
     # Relationships
+    team: Mapped[Optional["Team"]] = relationship(
+        "Team",
+        back_populates="projects",
+        lazy="select"
+    )
     creator: Mapped[Optional["User"]] = relationship(
         "User", 
         back_populates="created_projects", 

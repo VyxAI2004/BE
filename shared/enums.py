@@ -7,6 +7,12 @@ class RoleEnum(str, Enum):
     USER = "user"              # Người dùng thông thường
     GUEST = "guest"            # Khách
 
+class TeamRoleEnum(str, Enum):
+    """Vai trò của người dùng trong một team cụ thể."""
+    OWNER = "owner"        # Chủ sở hữu team
+    LEAD = "lead"          # Trưởng team / Lead
+    MEMBER = "member"      # Thành viên team
+
 class GlobalPermissionEnum(str, Enum):
     """Quyền hạn global trong hệ thống."""
     # User Management
@@ -18,6 +24,11 @@ class GlobalPermissionEnum(str, Enum):
     # Role Management
     MANAGE_ROLES = "manage_roles"
     ASSIGN_ROLES = "assign_roles"
+    
+    # Team Management
+    CREATE_TEAM = "create_team"
+    VIEW_ALL_TEAMS = "view_all_teams"
+    MANAGE_TEAMS = "manage_teams"
     
     # Project Management
     VIEW_ALL_PROJECTS = "view_all_projects"
@@ -31,6 +42,30 @@ class GlobalPermissionEnum(str, Enum):
     # System Management
     VIEW_SYSTEM_STATS = "view_system_stats"
     MANAGE_SYSTEM_SETTINGS = "manage_system_settings"
+
+class TeamPermissionEnum(str, Enum):
+    """Quyền hạn trong một team cụ thể."""
+    # Team Settings
+    VIEW_TEAM = "view_team"
+    EDIT_TEAM = "edit_team"
+    DELETE_TEAM = "delete_team"
+    
+    # Team Member Management
+    INVITE_MEMBERS = "invite_members"
+    REMOVE_MEMBERS = "remove_members"
+    UPDATE_MEMBER_ROLE = "update_member_role"
+    
+    # Project Management in Team
+    CREATE_PROJECT = "create_project"
+    EDIT_PROJECT = "edit_project"
+    DELETE_PROJECT = "delete_project"
+    
+    # Task Management
+    CREATE_TASK = "create_task"
+    EDIT_TASK = "edit_task"
+    DELETE_TASK = "delete_task"
+    ASSIGN_TASK = "assign_task"
+    VIEW_TASKS = "view_tasks"
 
 class ProjectRoleEnum(str, Enum):
     """Vai trò của người dùng trong một project cụ thể."""

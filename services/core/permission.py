@@ -6,6 +6,7 @@ import json
 
 from services.core.base import BaseService
 from models.role import Permission
+from models.team_user import TeamUser
 from schemas.role import PermissionCreate, PermissionUpdate
 from repositories.permission import PermissionRepository, PermissionFilters
 from core.cache import get_cache
@@ -163,3 +164,62 @@ class PermissionService(BaseService[Permission, PermissionCreate, PermissionUpda
         if perm and perm.is_system_permission:
             raise ValueError("Cannot deactivate system permission")
         return self.repository.deactivate_permission(str(permission_id))
+
+    # Team-level permission checks
+    def is_team_member(self, user_id: UUID, team_id: UUID) -> bool:
+        """Check if user is an active member of a team"""
+        team_user = self.db.query(TeamUser).filter(
+            TeamUser.user_id == user_id,
+            TeamUser.team_id == team_id,
+            TeamUser.is_active == True
+        ).first()
+        return team_user is not None
+
+    def is_team_owner(self, user_id: UUID, team_id: UUID) -> bool:
+        """Check if user is the owner of a team"""
+        team_user = self.db.query(TeamUser).filter(
+            TeamUser.user_id == user_id,
+            TeamUser.team_id == team_id,
+            TeamUser.role == 'owner',
+            TeamUser.is_active == True
+        ).first()
+        return team_user is not None
+
+    def is_team_lead(self, user_id: UUID, team_id: UUID) -> bool:
+        """Check if user is a lead or owner of a team"""
+        team_user = self.db.query(TeamUser).filter(
+            TeamUser.user_id == user_id,
+            TeamUser.team_id == team_id,
+            TeamUser.role.in_(['owner', 'lead']),
+            TeamUser.is_active == True
+        ).first()
+        return team_user is not None
+
+    def can_manage_team_members(self, user_id: UUID, team_id: UUID) -> bool:
+        """Check if user can manage team members (lead+ only)"""
+        return self.is_team_lead(user_id, team_id)
+
+    def enforce_team_membership(self, user_id: UUID, team_id: UUID):
+        """Raise exception if user is not a team member"""
+        if not self.is_team_member(user_id, team_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not a member of this team"
+            )
+
+    def enforce_team_lead(self, user_id: UUID, team_id: UUID):
+        """Raise exception if user is not a team lead or owner"""
+        if not self.is_team_lead(user_id, team_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only team leads or owners can perform this action"
+            )
+
+    def enforce_team_owner(self, user_id: UUID, team_id: UUID):
+        """Raise exception if user is not the team owner"""
+        if not self.is_team_owner(user_id, team_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the team owner can perform this action"
+            )
+

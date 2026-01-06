@@ -15,6 +15,10 @@ def get_auth_service(db: Session = Depends(get_db)):
     from services.core.auth import AuthService
     return AuthService(db)
 
+def get_team_service(db: Session = Depends(get_db)):
+    from services.core.team import TeamService
+    return TeamService(db)
+
 def get_project_service(db: Session = Depends(get_db)):
     from services.core.project import ProjectService
     return ProjectService(db)
@@ -66,3 +70,9 @@ def get_product_analytics_cache_service(db: Session = Depends(get_db)):
 def get_dashboard_service(db: Session = Depends(get_db)):
     from services.core.dashboard import DashboardService
     return DashboardService(db)
+
+def get_service(service_class):
+    """Generic service getter factory"""
+    def _get_service(db: Session = Depends(get_db)):
+        return service_class(db)
+    return _get_service

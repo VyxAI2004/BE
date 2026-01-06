@@ -21,6 +21,8 @@ class ProjectBase(BaseModel):
     assigned_model_id: Optional[UUID] = None
     created_by: Optional[UUID] = None
     deadline: Optional[date] = None
+    team_id: Optional[UUID] = None
+    visibility: Optional[str] = "public"
 
 class ProjectCreate(ProjectBase):
     """Schema for creating project"""
@@ -47,6 +49,8 @@ class ProjectResponse(ProjectBase):
     """Schema for project response"""
     id: UUID
     created_by: Optional[UUID] = None
+    team_id: Optional[UUID] = None
+    visibility: str = "public"
     next_crawl_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     created_at: datetime

@@ -35,14 +35,20 @@ def verify_token(
         raise HTTPException(status_code=401, detail="Invalid token type")
 
     try:
+        # Validate 'sub' field exists and is not None
+        if "sub" not in data or not data["sub"]:
+            raise HTTPException(status_code=401, detail="Invalid token: missing user ID")
+        
         token_data = TokenData(
             user_id=data["sub"],
             email=data["email"],
-            roles=data["roles"],
+            roles=data.get("roles", []),
+            global_permissions=data.get("global_permissions", []),
+            project_permissions=data.get("project_permissions", {}),
             exp=datetime.fromtimestamp(data["exp"], timezone.utc)
         )
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token format")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token format: {str(e)}")
 
     user = user_service.get_by_email(email=token_data.email)
 

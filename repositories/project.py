@@ -96,15 +96,12 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
 
         query = (
             self.db.query(Project)
-            .outerjoin(ProjectUser, Project.id == ProjectUser.project_id)
+            .outerjoin(ProjectUser, (Project.id == ProjectUser.project_id) & (ProjectUser.is_active == True))
             .filter(
                 or_(
                     Project.created_by == user_id,
                     Project.assigned_to == user_id,
-                    and_(
-                        ProjectUser.user_id == user_id,
-                        ProjectUser.is_active == True,
-                    ),
+                    ProjectUser.user_id == user_id,
                 )
             )
             .distinct()

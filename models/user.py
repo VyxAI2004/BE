@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from .comment import Comment
     from .product_user import ProductUser
     from .task_user import TaskUser
+    from .team import Team
+    from .team_user import TeamUser
 
 
 class User(Base):
@@ -46,6 +48,25 @@ class User(Base):
         "UserAIModel",
         back_populates="user",
         cascade="all, delete-orphan",
+        lazy="select"
+    )
+    # Team relationships
+    created_teams: Mapped[list["Team"]] = relationship(
+        "Team",
+        back_populates="creator",
+        foreign_keys="[Team.created_by]",
+        lazy="select"
+    )
+    team_memberships: Mapped[list["TeamUser"]] = relationship(
+        "TeamUser",
+        back_populates="user",
+        foreign_keys="[TeamUser.user_id]",
+        lazy="select"
+    )
+    invited_team_memberships: Mapped[list["TeamUser"]] = relationship(
+        "TeamUser",
+        back_populates="invited_by_user",
+        foreign_keys="[TeamUser.invited_by]",
         lazy="select"
     )
     created_projects: Mapped[list["Project"]] = relationship(
