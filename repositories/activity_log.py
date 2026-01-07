@@ -1,6 +1,6 @@
 from typing import List, Optional, Type, TypedDict
 from uuid import UUID
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Query
 from sqlalchemy import or_
 
 from models.activity_log import ActivityLog
@@ -22,7 +22,7 @@ class ActivityLogRepository(BaseRepository[ActivityLog, ActivityLogCreate, Activ
     def __init__(self, model: Type[ActivityLog], db: Session):
         super().__init__(model, db)
 
-    def _apply_filters(self, query, filters: Optional[ActivityLogFilters] = None):
+    def _apply_filters(self, query: Query, filters: Optional[ActivityLogFilters] = None) -> Query:
         if not filters:
             return query
 

@@ -7,17 +7,6 @@ from datetime import datetime
 import uuid
 
 
-class UserBaseSchema(BaseModel):
-    """Base schema for user info"""
-    user_id: uuid.UUID
-    username: str
-    email: str
-    full_name: str
-
-    class Config:
-        from_attributes = True
-
-
 class TeamUserCreate(BaseModel):
     """Schema for creating a TeamUser"""
     team_id: uuid.UUID

@@ -37,3 +37,23 @@ class AutoDiscoveryResponse(BaseModel):
     extracted_criteria: Optional[Dict[str, Any]] = Field(None, description="Extracted criteria if validation failed")
     suggested_platforms: Optional[List[str]] = Field(None, description="Suggested platforms if shopee is requested")
 
+
+class AutoDiscoveryFlowRequest(BaseModel):
+    """Request schema for detailed product analysis flow (Phase 2)"""
+    project_id: UUID = Field(..., description="Project ID")
+    products: List[Dict[str, Any]] = Field(
+        ..., 
+        description="List of products with review count config. Example: [{'product_id': 'uuid', 'review_count': 100}]"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "project_id": "550e8400-e29b-41d4-a716-446655440000",
+                "products": [
+                    {"product_id": "550e8400-e29b-41d4-a716-446655440001", "review_count": 100},
+                    {"product_id": "550e8400-e29b-41d4-a716-446655440002", "review_count": 90}
+                ]
+            }
+        }
+

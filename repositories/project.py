@@ -2,7 +2,7 @@ from typing import List, Optional, Type, TypedDict
 from uuid import UUID
 
 from sqlalchemy import or_, and_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Query
 
 from models.project import Project
 from schemas.project import ProjectCreate, ProjectUpdate
@@ -26,7 +26,7 @@ class ProjectRepository(BaseRepository[Project, ProjectCreate, ProjectUpdate]):
     def __init__(self, model: Type[Project], db: Session):
         super().__init__(model, db)
 
-    def apply_filters(self, query, filters: Optional[ProjectFilters] = None):
+    def apply_filters(self, query: Query, filters: Optional[ProjectFilters] = None) -> Query:
         if not filters:
             return query
 

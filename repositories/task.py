@@ -2,7 +2,7 @@ from typing import List, Optional, Type
 from uuid import UUID
 
 from sqlalchemy import or_, and_, func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, Query
 from sqlalchemy.sql import literal_column
 
 from models.task import Task
@@ -16,7 +16,7 @@ class TaskRepository(BaseRepository[Task, TaskCreate, TaskUpdate]):
     def __init__(self, model: Type[Task], db: Session):
         super().__init__(model, db)
     
-    def _with_product(self, query):
+    def _with_product(self, query: Query) -> Query:
         """Helper to eager load product relationship"""
         return query.options(joinedload(self.model.product))
 

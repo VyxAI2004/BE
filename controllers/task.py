@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from core.dependencies.db import get_db
 from core.dependencies.auth import verify_token, TokenData
 from services.core.task import TaskService
-from schemas.task import TaskCreate, TaskUpdate, TaskResponse
+from schemas.task import TaskCreate, TaskUpdate, TaskResponse, TaskListResponse
 
 logger = logging.getLogger(__name__)
 
@@ -23,14 +23,14 @@ def get_task_service(db: Session = Depends(get_db)) -> TaskService:
     return TaskService(db)
 
 
-@router.get("/", response_model=List[TaskResponse])
+@router.get("/", response_model=TaskListResponse)
 def get_tasks(
     project_id: Optional[UUID] = Query(None, description="Filter by project"),
     product_id: Optional[UUID] = Query(None, description="Filter by product"),
-    assigned_to: Optional[UUID] = Query(None, description="Filter by assigned user"),
+    assigned_to: Optional[list[UUID]] = Query(None, description="Filter by assigned user(s)"),
     status_filter: Optional[str] = Query(None, description="Filter by status", alias="status"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(1000, ge=1, le=10000),
     task_service: TaskService = Depends(get_task_service),
     token: TokenData = Depends(verify_token),
 ):
@@ -52,15 +52,31 @@ def get_tasks(
             filtered_tasks = [t for t in filtered_tasks if t.product_id == product_id]
         
         if assigned_to:
-            filtered_tasks = [t for t in filtered_tasks if t.assigned_to == assigned_to]
+            # Filter tasks where the assigned_to matches any of the filter IDs
+            filtered_tasks = [t for t in filtered_tasks if (t.assigned_to in assigned_to if assigned_to else False)]
         
         if status_filter:
             filtered_tasks = [t for t in filtered_tasks if t.status == status_filter]
         
+        # Get total count before pagination
+        total = len(filtered_tasks)
+        
         # Apply pagination
         paginated_tasks = filtered_tasks[skip : skip + limit]
         
-        return paginated_tasks
+        # Format response with assigned_to_ids from service
+        response_list = []
+        for task in paginated_tasks:
+            task_dict = TaskResponse.from_orm(task).model_dump()
+            task_dict['assigned_to_ids'] = task_service._build_assigned_to_list(task)
+            response_list.append(TaskResponse(**task_dict))
+        
+        return TaskListResponse(
+            total=total,
+            skip=skip,
+            limit=limit,
+            data=response_list
+        )
     except Exception as e:
         logger.error(f"Error getting tasks: {e}", exc_info=True)
         raise HTTPException(
@@ -93,7 +109,11 @@ def get_task(
             detail="You don't have permission to access this task",
         )
     
-    return task
+    # Format response with assigned_to_ids from service
+    task_dict = TaskResponse.from_orm(task).model_dump()
+    task_dict['assigned_to_ids'] = task_service._build_assigned_to_list(task)
+    
+    return task_dict
 
 
 @router.post("/", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
@@ -109,7 +129,11 @@ def create_task(
         payload_dict['created_by'] = token.user_id
         payload = TaskCreate(**payload_dict)
         
-        return task_service.create(payload=payload)
+        task = task_service.create(payload=payload)
+        # Format response with assigned_to_ids from service
+        task_dict = TaskResponse.from_orm(task).model_dump()
+        task_dict['assigned_to_ids'] = task_service._build_assigned_to_list(task)
+        return task_dict
     except Exception as e:
         logger.error(f"Error creating task: {e}", exc_info=True)
         raise HTTPException(
@@ -136,7 +160,14 @@ def update_task(
     # Check authorization - only creator or assigned user can update
     user_id = token.user_id
     is_creator = task.created_by == user_id
-    is_assigned = task.assigned_to == user_id
+    
+    # Handle both old single assignment and new multiple assignments
+    is_assigned = False
+    if task.assigned_to:
+        if isinstance(task.assigned_to, list):
+            is_assigned = user_id in task.assigned_to
+        else:
+            is_assigned = task.assigned_to == user_id
     
     # Creator can always update, or assigned user can update
     if not (is_creator or is_assigned):
@@ -146,7 +177,11 @@ def update_task(
         )
     
     try:
-        return task_service.update(db_obj=task, payload=payload, current_user_id=user_id)
+        task = task_service.update(db_obj=task, payload=payload, current_user_id=user_id)
+        # Format response with assigned_to_ids from service
+        task_dict = TaskResponse.from_orm(task).model_dump()
+        task_dict['assigned_to_ids'] = task_service._build_assigned_to_list(task)
+        return task_dict
     except Exception as e:
         logger.error(f"Error updating task: {e}", exc_info=True)
         raise HTTPException(
@@ -219,7 +254,11 @@ def complete_task(
             status="completed",
             completed_at=datetime.utcnow(),
         )
-        return task_service.update(db_obj=task, payload=update_payload)
+        task = task_service.update(db_obj=task, payload=update_payload)
+        # Format response with assigned_to_ids from service
+        task_dict = TaskResponse.from_orm(task).model_dump()
+        task_dict['assigned_to_ids'] = task_service._build_assigned_to_list(task)
+        return task_dict
     except HTTPException:
         raise
     except Exception as e:

@@ -186,3 +186,8 @@ class RoleRepository(BaseRepository[Role, RoleCreate, RoleUpdate]):
         if slugs is None:
             slugs = ["admin", "super_admin"]
         return self.db.query(Role).filter(Role.slug.in_(slugs)).all()
+    def get_user_roles(self, user_id) -> List[Role]:
+        """Get all roles assigned to a user"""
+        return self.db.query(Role).join(UserRole).filter(
+            UserRole.user_id == user_id
+        ).all()

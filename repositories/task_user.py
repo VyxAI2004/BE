@@ -1,7 +1,7 @@
 """
 Repository cho TaskUser - Data Access Layer
 """
-from typing import Optional
+from typing import Optional, Type
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -14,8 +14,8 @@ from .base import BaseRepository
 class TaskUserRepository(BaseRepository[TaskUser, TaskUserCreate, TaskUserUpdate]):
     """Repository để quản lý TaskUser"""
 
-    def __init__(self, db: Session):
-        super().__init__(db, TaskUser)
+    def __init__(self, model: Type[TaskUser], db: Session):
+        super().__init__(model, db)
 
     def get_by_task_and_user(
         self, task_id: UUID, user_id: UUID
@@ -72,7 +72,7 @@ class TaskUserRepository(BaseRepository[TaskUser, TaskUserCreate, TaskUserUpdate
         result = self.db.query(TaskUser).filter(
             TaskUser.task_id == task_id
         ).delete()
-        self.db.commit()
+        self.db.flush()  # Flush to ensure delete is applied before next operations
         return result
 
     def get_collaborators_by_role(

@@ -1,7 +1,7 @@
 """
 Repository cho ProductUser - Data Access Layer
 """
-from typing import Optional
+from typing import Optional, Type
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -14,8 +14,8 @@ from .base import BaseRepository
 class ProductUserRepository(BaseRepository[ProductUser, ProductUserCreate, ProductUserUpdate]):
     """Repository để quản lý ProductUser"""
 
-    def __init__(self, db: Session):
-        super().__init__(db, ProductUser)
+    def __init__(self, model: Type[ProductUser], db: Session):
+        super().__init__(model, db)
 
     def get_by_product_and_user(
         self, product_id: UUID, user_id: UUID

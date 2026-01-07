@@ -67,3 +67,15 @@ class ProjectUserRepository(BaseRepository[ProjectUser, ProjectUserCreate, Proje
             self.db.refresh(obj)
         
         return project_users
+
+    def update_member_role(self, project_id: UUID, user_id: UUID, new_role: str) -> Optional[ProjectUser]:
+        """Update a member's role in a project"""
+        project_user = self.get_by_project_and_user(project_id, user_id)
+        if not project_user:
+            return None
+        
+        project_user.role = new_role
+        self.db.add(project_user)
+        self.db.commit()
+        self.db.refresh(project_user)
+        return project_user

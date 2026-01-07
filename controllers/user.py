@@ -210,10 +210,7 @@ def promote_user_to_admin(
         user_permissions = permission_service.get_user_permissions(user_id=token.user_id)
         
         # Get user roles to check if super admin
-        from models.role import UserRole, Role
-        user_roles = db.query(Role).join(UserRole).filter(
-            UserRole.user_id == token.user_id
-        ).all()
+        user_roles = user_service.get_user_roles(user_id=token.user_id)
         
         is_super_admin = any(role.slug == RoleEnum.SUPER_ADMIN for role in user_roles)
         

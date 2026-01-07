@@ -23,7 +23,7 @@ class UserAIModelService:
             return self.repository.update(db_obj, UserAIModelUpdate(api_key=obj_in.api_key, config=obj_in.config))
         return self.repository.create(user_id, obj_in)
 
-    def delete(self, user_id: UUID, ai_model_id: UUID):
+    def delete(self, user_id: UUID, ai_model_id: UUID) -> None:
         db_obj = self.repository.get_by_user_and_model(user_id, ai_model_id)
         if db_obj:
             self.repository.delete(db_obj)

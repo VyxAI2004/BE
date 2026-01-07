@@ -7,9 +7,10 @@ from core.dependencies.db import get_db
 from core.dependencies.auth import verify_token
 from core.dependencies.services import get_project_service
 from schemas.auth import TokenData
-from schemas.auto_discovery import AutoDiscoveryRequest, AutoDiscoveryRequestLegacy, AutoDiscoveryResponse
+from schemas.auto_discovery import AutoDiscoveryRequest, AutoDiscoveryRequestLegacy, AutoDiscoveryResponse, AutoDiscoveryFlowRequest
 from services.features.product_intelligence.orchestration.auto_discovery_service import AutoDiscoveryService
 from services.features.product_intelligence.orchestration.auto_discovery_streaming_service import AutoDiscoveryStreamingService
+from services.features.product_intelligence.orchestration.auto_discovery_flow_service import AutoDiscoveryFlowService
 from services.core.project import ProjectService
 
 router = APIRouter(prefix="/products/auto-discovery", tags=["Auto Discovery"])
@@ -158,4 +159,68 @@ async def execute_auto_discovery_stream(
             "X-Accel-Buffering": "no"
         }
     )
+
+
+@router.post("/execute-flow")
+async def execute_detailed_flow(
+    request: AutoDiscoveryFlowRequest,
+    token: TokenData = Depends(verify_token),
+    db: Session = Depends(get_db)
+):
+    """
+    Execute detailed product analysis flow (Phase 2)
+    
+    After products are discovered and imported, this endpoint handles:
+    1. Crawl reviews (configurable count per product)
+    2. Calculate trust scores
+    3. Analyze reviews with AI
+    4. Generate marketing tasks
+    
+    **Input:**
+    - `project_id`: Project ID
+    - `products`: List of {product_id, review_count}
+    
+    **Response:** text/event-stream (SSE) with real-time events
+    
+    **Example Events:**
+    ```
+    data: {"type": "flow_start", "message": "...", "products_count": 2}
+    data: {"type": "review_crawl_progress", "product_id": "...", "current": 50, ...}
+    data: {"type": "trust_score_progress", "product_id": "...", "score": 8.5, ...}
+    data: {"type": "analysis_progress", "product_id": "...", "insights": [...], ...}
+    data: {"type": "task_generation_progress", "product_id": "...", "tasks": [...], ...}
+    data: {"type": "flow_complete", "results": {...}}
+    data: [DONE]
+    ```
+    """
+    
+    flow_service = AutoDiscoveryFlowService(db)
+    
+    async def event_generator():
+        try:
+            async for event in flow_service.execute_detailed_flow_stream(
+                project_id=request.project_id,
+                user_id=token.user_id,
+                products_config=request.products
+            ):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            error_event = {
+                "type": "error",
+                "message": f"Lỗi: {str(e)}",
+            }
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+        finally:
+            yield "data: [DONE]\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
 

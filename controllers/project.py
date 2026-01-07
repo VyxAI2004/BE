@@ -20,6 +20,7 @@ from schemas.project_user import (
     ProjectUserResponse,
     ProjectUserInviteRequest,
     ProjectMemberDetailResponse,
+    ProjectUserUpdateRoleRequest,
 )
 from shared.enums import ProjectStatusEnum
 from services.core.project import ProjectService
@@ -324,7 +325,7 @@ def get_project_members(
         result = []
         for member in members:
             try:
-                user = project_service.db.query(User).filter(User.id == member.user_id).first()
+                user = project_service.get_user_by_id(user_id=member.user_id)
                 if user:
                     result.append(ProjectMemberDetailResponse(
                         id=user.id,
@@ -342,6 +343,46 @@ def get_project_members(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching members: {str(e)}")
+
+@router.put("/{project_id}/members/{user_id}", response_model=ProjectUserResponse)
+def update_project_member_role(
+    *,
+    project_id: uuid.UUID,
+    user_id: uuid.UUID,
+    request: ProjectUserUpdateRoleRequest,
+    project_service: ProjectService = Depends(get_project_service),
+    user_from_token: TokenData = Depends(verify_token),
+):
+    """Update project member role"""
+    try:
+        # Check if user has permission to update (must be project creator)
+        project = project_service.get(id=project_id)
+        if not project:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        
+        if str(project.created_by) != str(user_from_token.user_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to update members in this project")
+        
+        # Update role
+        from services.core.project_user import ProjectUserService
+        project_user_service = ProjectUserService(project_service.db)
+        
+        updated_member = project_user_service.update_member_role(
+            project_id=project_id,
+            user_id=user_id,
+            new_role=request.role,
+            requester_id=user_from_token.user_id
+        )
+        return ProjectUserResponse.model_validate(updated_member)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error updating member: {str(e)}")
+
 
 @router.post("/{project_id}/invite", response_model=ProjectUserResponse)
 def invite_user_to_project(

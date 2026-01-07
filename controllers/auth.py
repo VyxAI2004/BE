@@ -2,34 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 import jwt
 from schemas.auth import TokenData, Token
 from schemas.user import UserResponse
-from schemas.clerk import ClerkTokenExchangeRequest, ClerkTokenExchangeResponse
 from core.dependencies.services import get_auth_service
 from core.dependencies.auth import JWT_ALGORITHM, verify_token
-from core.dependencies.clerk import get_clerk_service
 from core.dependencies.db import get_db
 from services.core.auth import JWT_SECRET_KEY, AuthService
-from services.core.clerk import ClerkService
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
-
-
-
-@router.post("/clerk-exchange", response_model=ClerkTokenExchangeResponse)
-def clerk_token_exchange(
-    request: ClerkTokenExchangeRequest,
-    clerk_service: ClerkService = Depends(get_clerk_service),
-):
-    """Exchange Clerk token for backend tokens"""
-    try:
-        result = clerk_service.exchange_clerk_token(request.clerk_token)
-        return ClerkTokenExchangeResponse(**result)
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.post("/login", response_model=Token)
 def login(
     email: str = Body(..., embed=True),

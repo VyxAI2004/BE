@@ -37,10 +37,10 @@ class AuthService(
     def __init__(self, db: Session):
         super().__init__(db, User, UserRepository)
 
-    def verify_password(self, plain_password, hashed_password):
+    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         return pwd_context.verify(plain_password, hashed_password)
 
-    def get_password_hash(self, password):
+    def get_password_hash(self, password: str) -> str:
         return pwd_context.hash(password)
 
     def _create_tokens(self, user: User, roles: list[str]) -> Token:

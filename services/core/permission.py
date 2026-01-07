@@ -9,6 +9,7 @@ from models.role import Permission
 from models.team_user import TeamUser
 from schemas.role import PermissionCreate, PermissionUpdate
 from repositories.permission import PermissionRepository, PermissionFilters
+from repositories.team_user import TeamUserRepository
 from core.cache import get_cache
 
 class PermissionService(BaseService[Permission, PermissionCreate, PermissionUpdate, PermissionRepository]):
@@ -17,6 +18,7 @@ class PermissionService(BaseService[Permission, PermissionCreate, PermissionUpda
         super().__init__(db, Permission, PermissionRepository)
         self.cache = get_cache()
         self.CACHE_TTL = 300  # 5 minutes
+        self.team_user_repository = TeamUserRepository(model=TeamUser, db=db)
 
     def _get_cache_key(self, user_id: UUID) -> str:
         return f"user:perms:{user_id}"
@@ -84,7 +86,7 @@ class PermissionService(BaseService[Permission, PermissionCreate, PermissionUpda
         
         return global_perms, project_perms_dict
 
-    def invalidate_user_cache(self, user_id: UUID):
+    def invalidate_user_cache(self, user_id: UUID) -> None:
         """Invalidate permission cache for a user"""
         self.cache.delete(self._get_cache_key(user_id))
 
@@ -109,7 +111,7 @@ class PermissionService(BaseService[Permission, PermissionCreate, PermissionUpda
         """
         return self.repository.is_project_owner_or_assignee(user_id, project_id)
 
-    def enforce_permission(self, user_id: UUID, permission_name: str, project_id: Optional[UUID] = None):
+    def enforce_permission(self, user_id: UUID, permission_name: str, project_id: Optional[UUID] = None) -> None:
         """
         Raise exception if user does not have permission.
         """
@@ -168,38 +170,36 @@ class PermissionService(BaseService[Permission, PermissionCreate, PermissionUpda
     # Team-level permission checks
     def is_team_member(self, user_id: UUID, team_id: UUID) -> bool:
         """Check if user is an active member of a team"""
-        team_user = self.db.query(TeamUser).filter(
-            TeamUser.user_id == user_id,
-            TeamUser.team_id == team_id,
-            TeamUser.is_active == True
-        ).first()
-        return team_user is not None
+        team_user = self.team_user_repository.get_team_member(team_id, user_id)
+        return team_user is not None and team_user.is_active
 
     def is_team_owner(self, user_id: UUID, team_id: UUID) -> bool:
         """Check if user is the owner of a team"""
-        team_user = self.db.query(TeamUser).filter(
-            TeamUser.user_id == user_id,
-            TeamUser.team_id == team_id,
-            TeamUser.role == 'owner',
-            TeamUser.is_active == True
-        ).first()
-        return team_user is not None
+        team_user = self.team_user_repository.get_multi(
+            filters={'user_id': user_id, 'team_id': team_id, 'is_active': True},
+            skip=0,
+            limit=1
+        )
+        if team_user:
+            return team_user[0].role == 'owner'
+        return False
 
     def is_team_lead(self, user_id: UUID, team_id: UUID) -> bool:
         """Check if user is a lead or owner of a team"""
-        team_user = self.db.query(TeamUser).filter(
-            TeamUser.user_id == user_id,
-            TeamUser.team_id == team_id,
-            TeamUser.role.in_(['owner', 'lead']),
-            TeamUser.is_active == True
-        ).first()
-        return team_user is not None
+        team_user = self.team_user_repository.get_multi(
+            filters={'user_id': user_id, 'team_id': team_id, 'is_active': True},
+            skip=0,
+            limit=1
+        )
+        if team_user:
+            return team_user[0].role in ['owner', 'lead']
+        return False
 
     def can_manage_team_members(self, user_id: UUID, team_id: UUID) -> bool:
         """Check if user can manage team members (lead+ only)"""
         return self.is_team_lead(user_id, team_id)
 
-    def enforce_team_membership(self, user_id: UUID, team_id: UUID):
+    def enforce_team_membership(self, user_id: UUID, team_id: UUID) -> None:
         """Raise exception if user is not a team member"""
         if not self.is_team_member(user_id, team_id):
             raise HTTPException(
@@ -207,7 +207,7 @@ class PermissionService(BaseService[Permission, PermissionCreate, PermissionUpda
                 detail="You are not a member of this team"
             )
 
-    def enforce_team_lead(self, user_id: UUID, team_id: UUID):
+    def enforce_team_lead(self, user_id: UUID, team_id: UUID) -> None:
         """Raise exception if user is not a team lead or owner"""
         if not self.is_team_lead(user_id, team_id):
             raise HTTPException(
@@ -215,7 +215,7 @@ class PermissionService(BaseService[Permission, PermissionCreate, PermissionUpda
                 detail="Only team leads or owners can perform this action"
             )
 
-    def enforce_team_owner(self, user_id: UUID, team_id: UUID):
+    def enforce_team_owner(self, user_id: UUID, team_id: UUID) -> None:
         """Raise exception if user is not the team owner"""
         if not self.is_team_owner(user_id, team_id):
             raise HTTPException(

@@ -50,24 +50,11 @@ class DashboardService:
         )
         
         # 3. Đếm tổng số reviews từ tất cả products trong các projects của user
-        # Sử dụng join để tính toán hiệu quả
-        total_reviews = (
-            self.db.query(func.count(ProductReview.id))
-            .join(Product, ProductReview.product_id == Product.id)
-            .filter(Product.project_id.in_(project_ids))
-            .scalar() or 0
-        )
+        # Sử dụng repository method để tính toán
+        total_reviews = self.review_repo.count_by_projects(project_ids)
         
         # 4. Tính điểm tin cậy trung bình từ tất cả products trong các projects của user
-        # Lấy tất cả trust scores của products trong user's projects
-        avg_trust_score_result = (
-            self.db.query(func.avg(ProductTrustScore.trust_score))
-            .join(Product, ProductTrustScore.product_id == Product.id)
-            .filter(Product.project_id.in_(project_ids))
-            .scalar()
-        )
-        
-        average_trust_score = float(avg_trust_score_result) if avg_trust_score_result is not None else 0.0
+        average_trust_score = self.trust_score_repo.avg_trust_score_by_projects(project_ids)
         
         return {
             "total_reviews": total_reviews,

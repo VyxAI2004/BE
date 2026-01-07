@@ -4,12 +4,14 @@ from sqlalchemy.orm import Session
 from models.project_user import ProjectUser
 from models.user import User
 from repositories.project_user import ProjectUserRepository
+from repositories.user import UserRepository
 from schemas.project_user import ProjectUserCreate, ProjectUserUpdate, ProjectMemberAssignRequest
 from .base import BaseService
 
 class ProjectUserService(BaseService[ProjectUser, ProjectUserCreate, ProjectUserUpdate, ProjectUserRepository]):
     def __init__(self, db: Session):
         super().__init__(db, ProjectUser, ProjectUserRepository)
+        self.user_repository = UserRepository(model=User, db=db)
 
     def get_project_members(self, project_id: uuid.UUID, is_active: bool = True) -> List[ProjectUser]:
         """Get all active members of a project"""
@@ -32,8 +34,8 @@ class ProjectUserService(BaseService[ProjectUser, ProjectUserCreate, ProjectUser
         invited_by: uuid.UUID = None
     ) -> ProjectUser:
         """Invite a user to project by email"""
-        # Find user by email
-        user = self.db.query(User).filter(User.email == email).first()
+        # Find user by email using UserRepository
+        user = self.user_repository.get_by_email(email=email)
         if not user:
             raise ValueError(f"User with email {email} not found")
         
@@ -45,7 +47,7 @@ class ProjectUserService(BaseService[ProjectUser, ProjectUserCreate, ProjectUser
             # Reactivate
             existing_membership.is_active = True
             existing_membership.role = role
-            existing_membership.status = "pending"
+            existing_membership.status = "accepted"
             self.db.add(existing_membership)
             self.db.commit()
             self.db.refresh(existing_membership)
@@ -56,7 +58,7 @@ class ProjectUserService(BaseService[ProjectUser, ProjectUserCreate, ProjectUser
             project_id=project_id,
             user_id=user.id,
             role=role,
-            status="pending",
+            status="accepted",
             invited_by=invited_by,
             is_active=True
         )
@@ -64,6 +66,19 @@ class ProjectUserService(BaseService[ProjectUser, ProjectUserCreate, ProjectUser
         self.db.commit()
         self.db.refresh(project_user)
         return project_user
+
+    def update_member_role(
+        self,
+        project_id: uuid.UUID,
+        user_id: uuid.UUID,
+        new_role: str,
+        requester_id: uuid.UUID = None
+    ) -> ProjectUser:
+        """Update member role in project"""
+        updated_member = self.repository.update_member_role(project_id, user_id, new_role)
+        if not updated_member:
+            raise ValueError("User is not a member of this project")
+        return updated_member
 
     def assign_users_to_project(
         self, 

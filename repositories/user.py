@@ -1,7 +1,7 @@
 from typing import List, Optional, Type, TypedDict
 
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Query
 
 from models.user import User
 from models.role import UserRole
@@ -20,7 +20,7 @@ class UserRepository(BaseRepository[User, UserCreate , UserUpdate ]):
     def __init__(self, model: Type[User], db: Session):
         super().__init__(model, db)
 
-    def _apply_filters(self, query, filters: Optional[UserFilters] = None):
+    def _apply_filters(self, query: Query, filters: Optional[UserFilters] = None) -> Query:
         if not filters:
             return query
 

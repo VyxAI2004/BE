@@ -29,6 +29,10 @@ class ProjectUserUpdate(BaseModel):
     permissions: Optional[dict] = None
     is_active: Optional[bool] = None
 
+class ProjectUserUpdateRoleRequest(BaseModel):
+    """Schema for updating project user role"""
+    role: str  # owner, admin, member, viewer
+
 class ProjectUserResponse(ProjectUserBase):
     """Schema for project user response"""
     id: UUID

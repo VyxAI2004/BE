@@ -2,7 +2,7 @@ from typing import List, Optional, Type, TypedDict
 from uuid import UUID
 
 from sqlalchemy import or_, and_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Query
 
 from models.product import Product
 from schemas.product import ProductCreate, ProductUpdate
@@ -26,7 +26,7 @@ class ProductRepository(BaseRepository[Product, ProductCreate, ProductUpdate]):
     def __init__(self, model: Type[Product], db: Session):
         super().__init__(model, db)
 
-    def apply_filters(self, query, filters: Optional[ProductFilters] = None):
+    def apply_filters(self, query: Query, filters: Optional[ProductFilters] = None) -> Query:
         # Initialize filter conditions list
         filter_conditions = []
         

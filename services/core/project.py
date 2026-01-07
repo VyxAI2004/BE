@@ -4,7 +4,11 @@ from sqlalchemy.orm import Session
 from models.project import Project
 from models.project_user import ProjectUser
 from models.team_user import TeamUser
+from models.user import User
 from repositories.project import ProjectFilters, ProjectRepository
+from repositories.team_user import TeamUserRepository
+from repositories.project_user import ProjectUserRepository
+from repositories.user import UserRepository
 from schemas.project import ProjectCreate, ProjectUpdate
 from schemas.project_user import ProjectMemberAssignRequest
 from shared.enums import ProjectStatusEnum
@@ -14,6 +18,9 @@ from .permission import PermissionService
 class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectRepository]):
     def __init__(self, db: Session):
         super().__init__(db, Project, ProjectRepository)
+        self.team_user_repository = TeamUserRepository(model=TeamUser, db=db)
+        self.project_user_repository = ProjectUserRepository(model=ProjectUser, db=db)
+        self.user_repository = UserRepository(model=User, db=db)
 
     def create(self, *, payload: ProjectCreate) -> Project:
         """Create a new project and automatically add the creator as a member with 'owner' role"""
@@ -40,17 +47,15 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectR
 
     def _auto_join_team_members(self, project_id: uuid.UUID, team_id: uuid.UUID) -> None:
         """Auto-join all active team members to public project"""
-        team_members = self.db.query(TeamUser).filter(
-            TeamUser.team_id == team_id,
-            TeamUser.is_active == True
-        ).all()
+        team_members = self.team_user_repository.get_multi(
+            filters={'team_id': team_id, 'is_active': True}
+        )
         
         for team_member in team_members:
             # Skip if already member
-            existing = self.db.query(ProjectUser).filter(
-                ProjectUser.project_id == project_id,
-                ProjectUser.user_id == team_member.user_id
-            ).first()
+            existing = self.project_user_repository.get_by_project_and_user(
+                project_id, team_member.user_id
+            )
             
             if not existing:
                 project_user = ProjectUser(
@@ -186,6 +191,10 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectR
         project_user_service = ProjectUserService(self.db)
         return project_user_service.get_project_members(project_id=project_id, is_active=True)
 
+    def get_user_by_id(self, user_id: uuid.UUID) -> Optional[User]:
+        """Get user by ID"""
+        return self.user_repository.get(user_id)
+
     def update_project_status(self, project_id: uuid.UUID, status: ProjectStatusEnum, user_id: uuid.UUID) -> Optional[Project]:
         """Update project status"""
         db_project = self.get(project_id)
@@ -213,7 +222,7 @@ class ProjectService(BaseService[Project, ProjectCreate, ProjectUpdate, ProjectR
         email: str, 
         role: str = "member",
         invited_by: uuid.UUID = None
-    ):
+    ) -> ProjectUser:
         """Invite a user to project by email"""
         from .project_user import ProjectUserService
         

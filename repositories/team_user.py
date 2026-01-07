@@ -67,6 +67,44 @@ class TeamUserRepository(BaseRepository[TeamUser, TeamUserCreate, TeamUserUpdate
             TeamUser.user_id == user_id
         ).first()
 
+    def get_team_member_response(self, team_id: UUID, user_id: UUID) -> Optional[TeamUserResponse]:
+        """Get specific team member with user details"""
+        result = self.db.query(
+            TeamUser.id,
+            TeamUser.team_id,
+            TeamUser.user_id,
+            User.username,
+            User.email,
+            User.full_name,
+            TeamUser.role,
+            TeamUser.status,
+            TeamUser.is_active,
+            TeamUser.joined_at,
+            TeamUser.invited_at,
+            TeamUser.accepted_at
+        ).join(User, TeamUser.user_id == User.id).filter(
+            TeamUser.team_id == team_id,
+            TeamUser.user_id == user_id
+        ).first()
+        
+        if not result:
+            return None
+        
+        return TeamUserResponse(
+            id=result.id,
+            team_id=result.team_id,
+            user_id=result.user_id,
+            username=result.username,
+            email=result.email,
+            full_name=result.full_name,
+            role=result.role,
+            status=result.status,
+            is_active=result.is_active,
+            joined_at=result.joined_at,
+            invited_at=result.invited_at,
+            accepted_at=result.accepted_at
+        )
+
     def is_team_member(self, team_id: UUID, user_id: UUID, is_active: bool = True) -> bool:
         """Check if user is a member of team"""
         query = self.db.query(TeamUser).filter(

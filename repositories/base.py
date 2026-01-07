@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy import and_, delete, asc, desc
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Query
 from sqlalchemy.exc import SQLAlchemyError
 
 from models.base import Base
@@ -18,7 +18,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         self.model = model
         self.db = db
 
-    def apply_filters(self, query, filters: Optional[dict]):
+    def apply_filters(self, query: Query, filters: Optional[dict]) -> Query:
         if not filters:
             return query
 
@@ -100,7 +100,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         return db_obj
 
     def update(self, *, db_obj: ModelType, obj_in: UpdateSchemaType) -> ModelType:
-        obj_data = obj_in.model_dump(exclude_unset=True)
+        obj_data = obj_in.model_dump(exclude_unset=True, exclude_none=True)
 
         for field, value in obj_data.items():
             if hasattr(db_obj, field):
